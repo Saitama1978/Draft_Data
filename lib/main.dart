@@ -29,7 +29,6 @@ class _ShipCalculatorAppState extends State<ShipCalculatorApp> {
       title: 'Ship Stability Calculator',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
-      // Light Theme
       theme: ThemeData.light().copyWith(
         scaffoldBackgroundColor: const Color(0xFFF1F5F9),
         cardColor: Colors.white,
@@ -42,7 +41,6 @@ class _ShipCalculatorAppState extends State<ShipCalculatorApp> {
           surface: Colors.white,
         ),
       ),
-      // Dark Theme
       darkTheme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0F172A),
         cardColor: const Color(0xFF1E293B),
@@ -85,7 +83,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     'dfwd', 'daft', 'km', 'kg', 'fsc', 'swDensity', 'dockDensity'
   ];
 
-  // Calculated values
+  // Calculated values - nakadaklara sa loob ng State Class
   double meanDraft = 0, trim = 0, freeboard = 0, airDraft = 0;
   double dwt = 0, gm = 0, gom = 0, rollPeriod = 0;
   double draftChangeMeters = 0, newMeanDraft = 0;
@@ -159,6 +157,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     );
   }
 
+  // ANG _calculate FUNCTION NA NAKAPALOOB SA _CalculatorScreenState
   void _calculate() {
     double parse(String key) => double.tryParse(_controllers[key]?.text ?? '') ?? 0.0;
 
@@ -191,9 +190,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         rollPeriod = 0;
       }
 
-      if (dockDensity > 0 && tpc > 0 && disp > 0) {
-        double draftChangeCm = (disp * (swDensity - dockDensity)) / (tpc * dockDensity);
-        draftChangeMeters = draftChangeCm / 100;
+      // Draft Change with Fallback
+      if (dockDensity > 0 && disp > 0) {
+        if (tpc > 0) {
+          // Standard Formula gamit ang TPC
+          double draftChangeCm = (disp * (swDensity - dockDensity)) / (tpc * dockDensity);
+          draftChangeMeters = draftChangeCm / 100;
+        } else {
+          // Fallback Approximation kung walang TPC
+          double estimatedFwaMeters = (disp / 10000) * 0.05;
+          draftChangeMeters = estimatedFwaMeters * ((swDensity - dockDensity) / 0.025);
+        }
         newMeanDraft = meanDraft + draftChangeMeters;
       } else {
         draftChangeMeters = 0;
@@ -351,7 +358,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             const SizedBox(height: 16),
             _buildResultsCard(),
             const SizedBox(height: 24),
-            // Developer Credit
             Text(
               'Developed by: Renante Fullo',
               style: TextStyle(
@@ -486,53 +492,4 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       ),
     );
   }
-}  void _calculate() {
-    double parse(String key) => double.tryParse(_controllers[key]?.text ?? '') ?? 0.0;
-
-    final lightship = parse('lightship');
-    final disp = parse('disp');
-    final depth = parse('depth');
-    final mastHeight = parse('mastHeight');
-    final beam = parse('beam');
-    final tpc = parse('tpc');
-    final dfwd = parse('dfwd');
-    final daft = parse('daft');
-    final km = parse('km');
-    final kg = parse('kg');
-    final fsc = parse('fsc');
-    final swDensity = parse('swDensity') == 0 ? 1.025 : parse('swDensity');
-    final dockDensity = parse('dockDensity');
-
-    setState(() {
-      meanDraft = (dfwd + daft) / 2;
-      trim = daft - dfwd;
-      freeboard = depth > 0 ? depth - meanDraft : 0;
-      airDraft = mastHeight > 0 ? mastHeight - meanDraft : 0;
-      dwt = disp > lightship ? disp - lightship : 0;
-      gm = km - kg;
-      gom = gm - fsc;
-
-      if (beam > 0 && gom > 0) {
-        rollPeriod = (0.8 * beam) / sqrt(gom);
-      } else {
-        rollPeriod = 0;
-      }
-
-      // CALCULATE DOCK DRAFT CHANGE (WITH FALLBACK HANDLING)
-      if (dockDensity > 0 && disp > 0) {
-        if (tpc > 0) {
-          // Exact Formula (Kumpormado sa TPC)
-          double draftChangeCm = (disp * (swDensity - dockDensity)) / (tpc * dockDensity);
-          draftChangeMeters = draftChangeCm / 100;
-        } else {
-          // Fallback Approximation kung walang TPC
-          double estimatedFwaMeters = (disp / 10000) * 0.05; 
-          draftChangeMeters = estimatedFwaMeters * ((swDensity - dockDensity) / 0.025);
-        }
-        newMeanDraft = meanDraft + draftChangeMeters;
-      } else {
-        draftChangeMeters = 0;
-        newMeanDraft = 0;
-      }
-    });
-  }
+}
