@@ -6,29 +6,71 @@ void main() {
   runApp(const ShipCalculatorApp());
 }
 
-class ShipCalculatorApp extends StatelessWidget {
+class ShipCalculatorApp extends StatefulWidget {
   const ShipCalculatorApp({super.key});
+
+  @override
+  State<ShipCalculatorApp> createState() => _ShipCalculatorAppState();
+}
+
+class _ShipCalculatorAppState extends State<ShipCalculatorApp> {
+  ThemeMode _themeMode = ThemeMode.dark;
+
+  void _toggleTheme() {
+    setState(() {
+      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ship Stability Calculator',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
+      themeMode: _themeMode,
+      // Light Theme
+      theme: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+        cardColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0F172A),
+          foregroundColor: Colors.white,
+        ),
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF0284C7),
+          surface: Colors.white,
+        ),
+      ),
+      // Dark Theme
+      darkTheme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0F172A),
         cardColor: const Color(0xFF1E293B),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E293B),
+          foregroundColor: Colors.white,
+        ),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF38BDF8),
           surface: Color(0xFF1E293B),
         ),
       ),
-      home: const CalculatorScreen(),
+      home: CalculatorScreen(
+        onToggleTheme: _toggleTheme,
+        isDarkMode: _themeMode == ThemeMode.dark,
+      ),
     );
   }
 }
 
 class CalculatorScreen extends StatefulWidget {
-  const CalculatorScreen({super.key});
+  final VoidCallback onToggleTheme;
+  final bool isDarkMode;
+
+  const CalculatorScreen({
+    super.key,
+    required this.onToggleTheme,
+    required this.isDarkMode,
+  });
 
   @override
   State<CalculatorScreen> createState() => _CalculatorScreenState();
@@ -138,9 +180,15 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ship Stability Calculator'),
+        title: const Text('Ship Stability Calculator', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E293B),
+        actions: [
+          IconButton(
+            icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            tooltip: 'Toggle Light/Dark Mode',
+            onPressed: widget.onToggleTheme,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -170,8 +218,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 Expanded(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF38BDF8),
-                      foregroundColor: const Color(0xFF0F172A),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: widget.isDarkMode ? const Color(0xFF0F172A) : Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     onPressed: _calculate,
@@ -182,8 +230,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 Expanded(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueGrey.shade700,
-                      foregroundColor: Colors.white,
+                      backgroundColor: widget.isDarkMode ? Colors.blueGrey.shade700 : Colors.grey.shade400,
+                      foregroundColor: widget.isDarkMode ? Colors.white : Colors.black87,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     onPressed: _reset,
@@ -194,6 +242,18 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ),
             const SizedBox(height: 16),
             _buildResultsCard(),
+            const SizedBox(height: 24),
+            // Developer Credit
+            Text(
+              'Developed by: Renante Fullo',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: widget.isDarkMode ? Colors.white54 : Colors.black45,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -203,13 +263,21 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   Widget _buildSectionCard(String title, List<Widget> children) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8))),
-            const Divider(color: Colors.white24, height: 20),
+            Text(
+              title, 
+              style: TextStyle(
+                fontSize: 15, 
+                fontWeight: FontWeight.bold, 
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const Divider(height: 20),
             Wrap(spacing: 12, runSpacing: 12, children: children),
           ],
         ),
@@ -223,7 +291,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+          Text(label, style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white70 : Colors.black87)),
           const SizedBox(height: 4),
           TextField(
             controller: _controllers[key],
@@ -243,14 +311,21 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   Widget _buildResultsCard() {
     return Card(
-      color: const Color(0xFF1E293B),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('RESULTS OUTPUT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8))),
-            const Divider(color: Colors.white24, height: 20),
+            Text(
+              'RESULTS OUTPUT', 
+              style: TextStyle(
+                fontSize: 15, 
+                fontWeight: FontWeight.bold, 
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const Divider(height: 20),
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -281,15 +356,22 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: widget.isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(6),
-        border: Border(left: BorderSide(color: isHighlight ? Colors.greenAccent : const Color(0xFF38BDF8), width: 3)),
+        border: Border(
+          left: BorderSide(
+            color: isHighlight 
+                ? (widget.isDarkMode ? Colors.greenAccent : Colors.green) 
+                : Theme.of(context).colorScheme.primary, 
+            width: 3,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: ColorScheme.dark().surface == const Color(0xFF1E293B) ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.white60)),
+          Text(label, style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white60 : Colors.black54)),
           const SizedBox(height: 2),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
         ],
