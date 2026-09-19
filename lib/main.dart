@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,7 +14,7 @@ class ShipCalculatorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Ship Stability & Draft Calculator',
+      title: 'Ship Stability Calculator',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -35,13 +36,20 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
   final TextEditingController _draftMidController = TextEditingController();
   final TextEditingController _draftAftController = TextEditingController();
   final TextEditingController _ktmController = TextEditingController();
+  final TextEditingController _kmController = TextEditingController();
+  final TextEditingController _kgController = TextEditingController();
+  final TextEditingController _fscController = TextEditingController(text: "0");
+  final TextEditingController _beamController = TextEditingController();
 
-  String _calculatedAirDraft = "0.00 m";
   String _calculatedMeanDraft = "0.00 m";
   String _calculatedTrim = "0.00 m";
+  String _calculatedAirDraft = "0.00 m";
+  String _calculatedSolidGM = "0.00 m";
+  String _calculatedFluidGM = "0.00 m";
+  String _calculatedRollingPeriod = "0.00 s";
 
   List<Map<String, String>> _historyList = [];
-  int? _editingIndex; // Nag-o-orbit kapag nag-e-edit ng lumang record
+  int? _editingIndex;
 
   @override
   void initState() {
@@ -49,7 +57,6 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     _loadHistory();
   }
 
-  // I-load ang History mula sa Local Storage
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
     String? historyJson = prefs.getString('saved_history');
@@ -61,7 +68,6 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     }
   }
 
-  // I-save o I-update ang History Item
   Future<void> _saveToHistory() async {
     if (_draftFwdController.text.isEmpty && _draftAftController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,18 +83,23 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
       'mid': _draftMidController.text,
       'aft': _draftAftController.text,
       'ktm': _ktmController.text,
+      'km': _kmController.text,
+      'kg': _kgController.text,
+      'fsc': _fscController.text,
+      'beam': _beamController.text,
       'mean': _calculatedMeanDraft,
       'trim': _calculatedTrim,
       'airDraft': _calculatedAirDraft,
+      'solidGM': _calculatedSolidGM,
+      'fluidGM': _calculatedFluidGM,
+      'rollingPeriod': _calculatedRollingPeriod,
     };
 
     setState(() {
       if (_editingIndex != null) {
-        // Kapag nasa Edit Mode, i-update ang napiling record
         _historyList[_editingIndex!] = entry;
         _editingIndex = null;
       } else {
-        // Kapag bagong save, idagdag sa pinakataas
         _historyList.insert(0, entry);
       }
     });
@@ -101,7 +112,6 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     );
   }
 
-  // I-load ang Record pabalik sa Form para ma-Edit
   void _editHistoryItem(int index) {
     final item = _historyList[index];
     setState(() {
@@ -110,28 +120,25 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
       _draftMidController.text = item['mid'] ?? '';
       _draftAftController.text = item['aft'] ?? '';
       _ktmController.text = item['ktm'] ?? '';
+      _kmController.text = item['km'] ?? '';
+      _kgController.text = item['kg'] ?? '';
+      _fscController.text = item['fsc'] ?? '0';
+      _beamController.text = item['beam'] ?? '';
       _calculate();
     });
-    Navigator.pop(context); // Isara ang History Popup
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Na-load ang entry #${index + 1}. Pwede mo na itong i-edit at i-save ulit.')),
-    );
+    Navigator.pop(context);
   }
 
-  // Burahin ang Single Record sa History
   Future<void> _deleteHistoryItem(int index, StateSetter setDialogState) async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _historyList.removeAt(index);
-      if (_editingIndex == index) {
-        _editingIndex = null;
-      }
+      if (_editingIndex == index) _editingIndex = null;
     });
     setDialogState(() {});
     await prefs.setString('saved_history', jsonEncode(_historyList));
   }
 
-  // Burahin ang Lahat ng History Records
   Future<void> _clearAllHistory(StateSetter setDialogState) async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -142,25 +149,38 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     await prefs.remove('saved_history');
   }
 
-  // Kalkulasyon para sa Draft, Trim, at Air Draft
   void _calculate() {
     double fwd = double.tryParse(_draftFwdController.text) ?? 0.0;
     double mid = double.tryParse(_draftMidController.text) ?? 0.0;
     double aft = double.tryParse(_draftAftController.text) ?? 0.0;
     double ktm = double.tryParse(_ktmController.text) ?? 0.0;
+    double km = double.tryParse(_kmController.text) ?? 0.0;
+    double kg = double.tryParse(_kgController.text) ?? 0.0;
+    double fsc = double.tryParse(_fscController.text) ?? 0.0;
+    double beam = double.tryParse(_beamController.text) ?? 0.0;
 
     double meanDraft = (fwd + (4 * mid) + aft) / 6;
     double trim = aft - fwd;
     double airDraft = ktm > 0 ? (ktm - meanDraft) : 0.0;
 
+    double solidGM = km - kg;
+    double fluidGM = solidGM - fsc;
+
+    double rollingPeriod = 0.0;
+    if (beam > 0 && fluidGM > 0) {
+      rollingPeriod = (0.8 * beam) / sqrt(fluidGM);
+    }
+
     setState(() {
       _calculatedMeanDraft = "${meanDraft.toStringAsFixed(2)} m";
       _calculatedTrim = "${trim.toStringAsFixed(2)} m";
       _calculatedAirDraft = "${airDraft.toStringAsFixed(2)} m";
+      _calculatedSolidGM = "${solidGM.toStringAsFixed(2)} m";
+      _calculatedFluidGM = "${fluidGM.toStringAsFixed(2)} m";
+      _calculatedRollingPeriod = "${rollingPeriod.toStringAsFixed(2)} s";
     });
   }
 
-  // Pop-up Dialog para sa History List
   void _showHistoryDialog() {
     showDialog(
       context: context,
@@ -174,28 +194,9 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
                 if (_historyList.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.delete_forever, color: Colors.red),
-                    tooltip: 'Clear All History',
                     onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Clear All History?'),
-                          content: const Text('Sigurado ka bang gusto mong burahin ang lahat ng na-save na records?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                _clearAllHistory(setDialogState);
-                                Navigator.pop(ctx);
-                              },
-                              child: const Text('Delete All', style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
-                        ),
-                      );
+                      _clearAllHistory(setDialogState);
+                      Navigator.pop(context);
                     },
                   ),
               ],
@@ -210,24 +211,18 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
                       itemBuilder: (context, index) {
                         final item = _historyList[index];
                         return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
                           child: ListTile(
-                            title: Text('Date: ${item['date']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            subtitle: Text('F/M/A: ${item['fwd']}/${item['mid']}/${item['aft']}m\nMean: ${item['mean']} | Air: ${item['airDraft']}'),
-                            isThreeLine: true,
+                            title: Text('Date: ${item['date']}'),
+                            subtitle: Text('Fluid GM: ${item['fluidGM']} | Roll: ${item['rollingPeriod']}'),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // EDIT BUTTON
                                 IconButton(
                                   icon: const Icon(Icons.edit, color: Colors.blue),
-                                  tooltip: 'Edit Entry',
                                   onPressed: () => _editHistoryItem(index),
                                 ),
-                                // DELETE BUTTON
                                 IconButton(
                                   icon: const Icon(Icons.delete, color: Colors.red),
-                                  tooltip: 'Delete Entry',
                                   onPressed: () => _deleteHistoryItem(index, setDialogState),
                                 ),
                               ],
@@ -255,16 +250,8 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
       appBar: AppBar(
         title: const Text('Ship Stability Calculator'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'View History',
-            onPressed: _showHistoryDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save Data',
-            onPressed: _saveToHistory,
-          ),
+          IconButton(icon: const Icon(Icons.history), onPressed: _showHistoryDialog),
+          IconButton(icon: const Icon(Icons.save), onPressed: _saveToHistory),
         ],
       ),
       body: SingleChildScrollView(
@@ -272,63 +259,20 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Indicator Bar kapag nasa Edit Mode
-            if (_editingIndex != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8.0),
-                margin: const EdgeInsets.only(bottom: 12.0),
-                color: Colors.orange.shade100,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Editing Record #${_editingIndex! + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () {
-                        setState(() {
-                          _editingIndex = null;
-                          _draftFwdController.clear();
-                          _draftMidController.clear();
-                          _draftAftController.clear();
-                          _ktmController.clear();
-                          _calculate();
-                        });
-                      },
-                    )
-                  ],
-                ),
-              ),
+            const Text('1. Draft & Particulars', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            TextField(controller: _draftFwdController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Draft Fwd (m)'), onChanged: (_) => _calculate()),
+            TextField(controller: _draftMidController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Draft Mid (m)'), onChanged: (_) => _calculate()),
+            TextField(controller: _draftAftController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Draft Aft (m)'), onChanged: (_) => _calculate()),
+            TextField(controller: _ktmController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'KTM (m)'), onChanged: (_) => _calculate()),
+            TextField(controller: _beamController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Ship Beam / Width (m)'), onChanged: (_) => _calculate()),
 
-            const Text('Draft Inputs (Meters)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            TextField(
-              controller: _draftFwdController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Draft Forward (Fwd)'),
-              onChanged: (_) => _calculate(),
-            ),
-            TextField(
-              controller: _draftMidController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Draft Midship (Mid)'),
-              onChanged: (_) => _calculate(),
-            ),
-            TextField(
-              controller: _draftAftController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Draft Aft'),
-              onChanged: (_) => _calculate(),
-            ),
             const SizedBox(height: 15),
-            const Text('Ship Particulars', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            TextField(
-              controller: _ktmController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Keel to Mast Head / KTM (m)'),
-              onChanged: (_) => _calculate(),
-            ),
-            const SizedBox(height: 20),
+            const Text('2. Stability Hydrostatics', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            TextField(controller: _kmController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'KM (m)'), onChanged: (_) => _calculate()),
+            TextField(controller: _kgController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'KG (m)'), onChanged: (_) => _calculate()),
+            TextField(controller: _fscController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'FSC (m)'), onChanged: (_) => _calculate()),
 
+            const SizedBox(height: 20),
             Card(
               color: Colors.blue.shade50,
               child: Padding(
@@ -338,42 +282,27 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
                   children: [
                     const Text('Calculated Results', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const Divider(),
-                    Text('Quarter Mean Draft: $_calculatedMeanDraft'),
+                    Text('Mean Draft: $_calculatedMeanDraft'),
                     Text('Trim: $_calculatedTrim'),
                     Text('Air Draft: $_calculatedAirDraft'),
+                    const SizedBox(height: 5),
+                    Text('Solid GM: $_calculatedSolidGM', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('Fluid GM (GoM): $_calculatedFluidGM', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                    Text('Est. Rolling Period: $_calculatedRollingPeriod', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 20),
-
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _saveToHistory,
-                    icon: const Icon(Icons.save),
-                    label: Text(_editingIndex != null ? 'Update Record' : 'Save to History'),
-                  ),
-                ),
+                Expanded(child: ElevatedButton.icon(onPressed: _saveToHistory, icon: const Icon(Icons.save), label: const Text('Save Record'))),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _showHistoryDialog,
-                    icon: const Icon(Icons.history),
-                    label: const Text('View History'),
-                  ),
-                ),
+                Expanded(child: ElevatedButton.icon(onPressed: _showHistoryDialog, icon: const Icon(Icons.history), label: const Text('History'))),
               ],
             ),
-            const SizedBox(height: 30),
-
-            const Center(
-              child: Text(
-                'Developer: Renante Fullo',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
-              ),
-            ),
+            const SizedBox(height: 20),
+            const Center(child: Text('Developer: Renante Fullo', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey))),
           ],
         ),
       ),
