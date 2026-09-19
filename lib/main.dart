@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pdf/pdf.dart';
+import 'package:pdf/pdf.dart' as pdf_lib;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
@@ -235,14 +235,15 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
+        pageFormat: pdf_lib.PdfPageFormat.a4,
         build: (pw.Context context) {
           return pw.Padding(
             padding: const pw.EdgeInsets.all(24),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Ship Stability & Draft Calculation Report', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Ship Stability & Draft Calculation Report',
+                    style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 8),
                 pw.Text('Date: ${DateTime.now().toString().substring(0, 16)}'),
                 pw.Divider(),
@@ -267,7 +268,9 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
                 pw.Text('Est. Rolling Period: $_calculatedRollingPeriod'),
                 pw.Spacer(),
                 pw.Divider(),
-                pw.Center(child: pw.Text('Developer: Renante Fullo', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                pw.Center(
+                  child: pw.Text('Developer: Renante Fullo', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                ),
               ],
             ),
           );
