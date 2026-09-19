@@ -1,10 +1,7 @@
-import 'dart:convert';
+import 'dart0:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pdf/pdf.dart' as pdf_lib;
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 void main() {
   runApp(const ShipCalculatorApp());
@@ -43,6 +40,7 @@ class _ShipCalculatorAppState extends State<ShipCalculatorApp> {
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF0A1624),
           foregroundColor: Colors.white,
@@ -230,55 +228,41 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     });
   }
 
-  Future<void> _printReport() async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: pdf_lib.PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Padding(
-            padding: const pw.EdgeInsets.all(24),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Ship Stability & Draft Calculation Report',
-                    style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 8),
-                pw.Text('Date: ${DateTime.now().toString().substring(0, 16)}'),
-                pw.Divider(),
-                pw.SizedBox(height: 8),
-                pw.Text('1. Ship Particulars', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text('KTM: ${_ktmController.text} m | Beam: ${_beamController.text} m'),
-                pw.SizedBox(height: 8),
-                pw.Text('2. Draft & Hydrostatic Values', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text('Fwd: ${_draftFwdController.text} m | Mid: ${_draftMidController.text} m | Aft: ${_draftAftController.text} m'),
-                pw.Text('KM: ${_kmController.text} m | KG: ${_kgController.text} m | FSC: ${_fscController.text} m'),
-                pw.SizedBox(height: 8),
-                pw.Text('3. Density Settings', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text('SW Density: ${_swDensityController.text} | Dock Density: ${_dockDensityController.text}'),
-                pw.SizedBox(height: 12),
-                pw.Divider(),
-                pw.Text('Calculated Results', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
-                pw.Text('Quarter Mean Draft: $_calculatedMeanDraft'),
-                pw.Text('Trim: $_calculatedTrim'),
-                pw.Text('Air Draft: $_calculatedAirDraft'),
-                pw.Text('Solid GM: $_calculatedSolidGM'),
-                pw.Text('Fluid GM (GoM): $_calculatedFluidGM'),
-                pw.Text('Est. Rolling Period: $_calculatedRollingPeriod'),
-                pw.Spacer(),
-                pw.Divider(),
-                pw.Center(
-                  child: pw.Text('Developer: Renante Fullo', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                ),
-              ],
-            ),
-          );
-        },
+  void _showReportSummary() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Calculation Summary'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Date: ${DateTime.now().toString().substring(0, 16)}'),
+              const Divider(),
+              const Text('Inputs:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Fwd: ${_draftFwdController.text} m | Mid: ${_draftMidController.text} m | Aft: ${_draftAftController.text} m'),
+              Text('KTM: ${_ktmController.text} m | Beam: ${_beamController.text} m'),
+              Text('KM: ${_kmController.text} m | KG: ${_kgController.text} m | FSC: ${_fscController.text} m'),
+              const Divider(),
+              const Text('Results:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Quarter Mean Draft: $_calculatedMeanDraft'),
+              Text('Trim: $_calculatedTrim'),
+              Text('Air Draft: $_calculatedAirDraft'),
+              Text('Solid GM: $_calculatedSolidGM'),
+              Text('Fluid GM (GoM): $_calculatedFluidGM'),
+              Text('Est. Rolling Period: $_calculatedRollingPeriod'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
-
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
   void _showHistoryDialog() {
@@ -326,7 +310,7 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
   Widget _buildSectionCard({required String title, required List<Widget> children}) {
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: widget.isDarkMode ? Colors.grey.shade900 : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -338,10 +322,10 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1377A6),
+                color: widget.isDarkMode ? Colors.lightBlueAccent : const Color(0xFF1377A6),
               ),
             ),
             const SizedBox(height: 6),
@@ -360,7 +344,7 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(labelText, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          Text(labelText, style: TextStyle(fontSize: 13, color: widget.isDarkMode ? Colors.white70 : Colors.black87)),
           const SizedBox(height: 6),
           TextField(
             controller: controller,
@@ -370,11 +354,6 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.black87),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.black87),
               ),
             ),
             onChanged: (_) => _calculate(),
@@ -400,9 +379,9 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
             onPressed: widget.onToggleDarkMode,
           ),
           IconButton(
-            icon: const Icon(Icons.print),
-            tooltip: 'Print Report',
-            onPressed: _printReport,
+            icon: const Icon(Icons.assignment),
+            tooltip: 'Summary',
+            onPressed: _showReportSummary,
           ),
           IconButton(
             icon: const Icon(Icons.history),
@@ -454,22 +433,29 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
             // Calculated Results Card
             Card(
               elevation: 0,
-              color: Colors.blue.shade50,
+              color: widget.isDarkMode ? Colors.grey.shade800 : Colors.blue.shade50,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Calculated Results', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1377A6))),
+                    Text('Calculated Results',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: widget.isDarkMode ? Colors.lightBlueAccent : const Color(0xFF1377A6),
+                        )),
                     const Divider(),
                     Text('Quarter Mean Draft: $_calculatedMeanDraft'),
                     Text('Trim: $_calculatedTrim'),
                     Text('Air Draft: $_calculatedAirDraft'),
                     const SizedBox(height: 4),
                     Text('Solid GM: $_calculatedSolidGM'),
-                    Text('Fluid GM (GoM): $_calculatedFluidGM', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                    Text('Est. Rolling Period: $_calculatedRollingPeriod', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                    Text('Fluid GM (GoM): $_calculatedFluidGM',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                    Text('Est. Rolling Period: $_calculatedRollingPeriod',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                   ],
                 ),
               ),
