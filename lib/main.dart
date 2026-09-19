@@ -15,254 +15,202 @@ class ShipCalculatorApp extends StatefulWidget {
 }
 
 class _ShipCalculatorAppState extends State<ShipCalculatorApp> {
-  bool _isDarkMode = false;
+  ThemeMode _themeMode = ThemeMode.dark;
 
-  void _toggleDarkMode() {
+  void _toggleTheme() {
     setState(() {
-      _isDarkMode = !_isDarkMode;
+      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'Ship Stability Calculator',
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF2F5F9),
+      debugShowCheckedModeBanner: false,
+      themeMode: _themeMode,
+      // Light Theme
+      theme: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+        cardColor: Colors.white,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0F2338),
+          backgroundColor: Color(0xFF0F172A),
           foregroundColor: Colors.white,
         ),
-        useMaterial3: true,
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF0284C7),
+          surface: Colors.white,
+        ),
       ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212),
+      // Dark Theme
+      darkTheme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        cardColor: const Color(0xFF1E293B),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0A1624),
+          backgroundColor: Color(0xFF1E293B),
           foregroundColor: Colors.white,
         ),
-        useMaterial3: true,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF38BDF8),
+          surface: Color(0xFF1E293B),
+        ),
       ),
-      home: CalculatorHomeScreen(
-        isDarkMode: _isDarkMode,
-        onToggleDarkMode: _toggleDarkMode,
+      home: CalculatorScreen(
+        onToggleTheme: _toggleTheme,
+        isDarkMode: _themeMode == ThemeMode.dark,
       ),
     );
   }
 }
 
-class CalculatorHomeScreen extends StatefulWidget {
+class CalculatorScreen extends StatefulWidget {
+  final VoidCallback onToggleTheme;
   final bool isDarkMode;
-  final VoidCallback onToggleDarkMode;
 
-  const CalculatorHomeScreen({
+  const CalculatorScreen({
     super.key,
+    required this.onToggleTheme,
     required this.isDarkMode,
-    required this.onToggleDarkMode,
   });
 
   @override
-  State<CalculatorHomeScreen> createState() => _CalculatorHomeScreenState();
+  State<CalculatorScreen> createState() => _CalculatorScreenState();
 }
 
-class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
-  // 1. Ship Particulars
-  final TextEditingController _ktmController = TextEditingController();
-  final TextEditingController _beamController = TextEditingController();
+class _CalculatorScreenState extends State<CalculatorScreen> {
+  final _controllers = <String, TextEditingController>{};
 
-  // 2. Draft & Hydrostatic Values
-  final TextEditingController _draftFwdController = TextEditingController();
-  final TextEditingController _draftMidController = TextEditingController();
-  final TextEditingController _draftAftController = TextEditingController();
-  final TextEditingController _kmController = TextEditingController();
-  final TextEditingController _kgController = TextEditingController();
-  final TextEditingController _fscController = TextEditingController(text: "0");
+  final fields = [
+    'lightship', 'disp', 'depth', 'mastHeight', 'beam', 'tpc',
+    'dfwd', 'daft', 'km', 'kg', 'fsc', 'swDensity', 'dockDensity'
+  ];
 
-  // 3. Density Settings
-  final TextEditingController _swDensityController = TextEditingController(text: "1.025");
-  final TextEditingController _dockDensityController = TextEditingController(text: "1.025");
+  // Calculated values
+  double meanDraft = 0, trim = 0, freeboard = 0, airDraft = 0;
+  double dwt = 0, gm = 0, gom = 0, rollPeriod = 0;
+  double draftChangeMeters = 0, newMeanDraft = 0;
 
-  // Calculated Results
-  String _calculatedMeanDraft = "0.00 m";
-  String _calculatedTrim = "0.00 m";
-  String _calculatedAirDraft = "0.00 m";
-  String _calculatedSolidGM = "0.00 m";
-  String _calculatedFluidGM = "0.00 m";
-  String _calculatedRollingPeriod = "0.00 s";
-
-  List<Map<String, String>> _historyList = [];
+  List<Map<String, String>> _savedHistory = [];
 
   @override
   void initState() {
     super.initState();
+    for (var key in fields) {
+      _controllers[key] = TextEditingController();
+    }
+    _controllers['swDensity']?.text = '1.025';
+    _controllers['fsc']?.text = '0';
     _loadHistory();
   }
 
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    String? historyJson = prefs.getString('saved_history');
+    String? historyJson = prefs.getString('ship_history_records');
     if (historyJson != null) {
       setState(() {
         List<dynamic> decoded = jsonDecode(historyJson);
-        _historyList = decoded.map((item) => Map<String, String>.from(item)).toList();
+        _savedHistory = decoded.map((e) => Map<String, String>.from(e)).toList();
       });
     }
+    _calculate();
   }
 
-  Future<void> _saveToHistory() async {
-    if (_draftFwdController.text.isEmpty && _draftAftController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maglagay muna ng draft values bago mag-save.')),
-      );
-      return;
-    }
-
+  Future<void> _saveCurrentRecord() async {
     final prefs = await SharedPreferences.getInstance();
-    Map<String, String> newEntry = {
-      'date': DateTime.now().toString().substring(0, 16),
-      'ktm': _ktmController.text,
-      'beam': _beamController.text,
-      'fwd': _draftFwdController.text,
-      'mid': _draftMidController.text,
-      'aft': _draftAftController.text,
-      'km': _kmController.text,
-      'kg': _kgController.text,
-      'fsc': _fscController.text,
-      'swDensity': _swDensityController.text,
-      'dockDensity': _dockDensityController.text,
-      'mean': _calculatedMeanDraft,
-      'trim': _calculatedTrim,
-      'airDraft': _calculatedAirDraft,
-      'solidGM': _calculatedSolidGM,
-      'fluidGM': _calculatedFluidGM,
-      'rollingPeriod': _calculatedRollingPeriod,
+    Map<String, String> newRecord = {
+      'timestamp': DateTime.now().toString().substring(0, 16),
     };
 
+    for (var key in fields) {
+      newRecord[key] = _controllers[key]?.text ?? '';
+    }
+
     setState(() {
-      _historyList.insert(0, newEntry);
+      _savedHistory.insert(0, newRecord);
     });
 
-    await prefs.setString('saved_history', jsonEncode(_historyList));
+    await prefs.setString('ship_history_records', jsonEncode(_savedHistory));
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Na-save sa History!')),
+      const SnackBar(content: Text('Successfully saved to history!')),
     );
   }
 
-  void _editHistoryItem(Map<String, String> item) {
+  Future<void> _deleteRecord(int index, StateSetter setDialogState) async {
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _ktmController.text = item['ktm'] ?? '';
-      _beamController.text = item['beam'] ?? '';
-      _draftFwdController.text = item['fwd'] ?? '';
-      _draftMidController.text = item['mid'] ?? '';
-      _draftAftController.text = item['aft'] ?? '';
-      _kmController.text = item['km'] ?? '';
-      _kgController.text = item['kg'] ?? '';
-      _fscController.text = item['fsc'] ?? '0';
-      _swDensityController.text = item['swDensity'] ?? '1.025';
-      _dockDensityController.text = item['dockDensity'] ?? '1.025';
+      _savedHistory.removeAt(index);
+    });
+    setDialogState(() {});
+    await prefs.setString('ship_history_records', jsonEncode(_savedHistory));
+  }
+
+  void _loadRecordToFields(Map<String, String> record) {
+    setState(() {
+      for (var key in fields) {
+        _controllers[key]?.text = record[key] ?? '';
+      }
       _calculate();
     });
     Navigator.pop(context);
-  }
-
-  Future<void> _deleteHistoryItem(int index, StateSetter setDialogState) async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _historyList.removeAt(index);
-    });
-    setDialogState(() {});
-    await prefs.setString('saved_history', jsonEncode(_historyList));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Record loaded to calculator!')),
+    );
   }
 
   void _calculate() {
-    double fwd = double.tryParse(_draftFwdController.text) ?? 0.0;
-    double mid = double.tryParse(_draftMidController.text) ?? 0.0;
-    double aft = double.tryParse(_draftAftController.text) ?? 0.0;
-    double ktm = double.tryParse(_ktmController.text) ?? 0.0;
-    double beam = double.tryParse(_beamController.text) ?? 0.0;
-    double km = double.tryParse(_kmController.text) ?? 0.0;
-    double kg = double.tryParse(_kgController.text) ?? 0.0;
-    double fsc = double.tryParse(_fscController.text) ?? 0.0;
+    double parse(String key) => double.tryParse(_controllers[key]?.text ?? '') ?? 0.0;
 
-    double meanDraft = (fwd + (4 * mid) + aft) / 6;
-    double trim = aft - fwd;
-    double airDraft = ktm > 0 ? (ktm - meanDraft) : 0.0;
-
-    double solidGM = km - kg;
-    double fluidGM = solidGM - fsc;
-
-    double rollingPeriod = 0.0;
-    if (beam > 0 && fluidGM > 0) {
-      rollingPeriod = (0.8 * beam) / sqrt(fluidGM);
-    }
+    final lightship = parse('lightship');
+    final disp = parse('disp');
+    final depth = parse('depth');
+    final mastHeight = parse('mastHeight');
+    final beam = parse('beam');
+    final tpc = parse('tpc');
+    final dfwd = parse('dfwd');
+    final daft = parse('daft');
+    final km = parse('km');
+    final kg = parse('kg');
+    final fsc = parse('fsc');
+    final swDensity = parse('swDensity') == 0 ? 1.025 : parse('swDensity');
+    final dockDensity = parse('dockDensity');
 
     setState(() {
-      _calculatedMeanDraft = "${meanDraft.toStringAsFixed(2)} m";
-      _calculatedTrim = "${trim.toStringAsFixed(2)} m";
-      _calculatedAirDraft = "${airDraft.toStringAsFixed(2)} m";
-      _calculatedSolidGM = "${solidGM.toStringAsFixed(2)} m";
-      _calculatedFluidGM = "${fluidGM.toStringAsFixed(2)} m";
-      _calculatedRollingPeriod = "${rollingPeriod.toStringAsFixed(2)} s";
+      meanDraft = (dfwd + daft) / 2;
+      trim = daft - dfwd;
+      freeboard = depth > 0 ? depth - meanDraft : 0;
+      airDraft = mastHeight > 0 ? mastHeight - meanDraft : 0;
+      dwt = disp > lightship ? disp - lightship : 0;
+      gm = km - kg;
+      gom = gm - fsc;
+
+      if (beam > 0 && gom > 0) {
+        rollPeriod = (0.8 * beam) / sqrt(gom);
+      } else {
+        rollPeriod = 0;
+      }
+
+      if (dockDensity > 0 && tpc > 0 && disp > 0) {
+        double draftChangeCm = (disp * (swDensity - dockDensity)) / (tpc * dockDensity);
+        draftChangeMeters = draftChangeCm / 100;
+        newMeanDraft = meanDraft + draftChangeMeters;
+      } else {
+        draftChangeMeters = 0;
+        newMeanDraft = 0;
+      }
     });
   }
 
-  void _resetFields() {
+  void _reset() {
     setState(() {
-      _ktmController.clear();
-      _beamController.clear();
-      _draftFwdController.clear();
-      _draftMidController.clear();
-      _draftAftController.clear();
-      _kmController.clear();
-      _kgController.clear();
-      _fscController.text = "0";
-      _swDensityController.text = "1.025";
-      _dockDensityController.text = "1.025";
+      for (var key in fields) {
+        _controllers[key]?.clear();
+      }
+      _controllers['swDensity']?.text = '1.025';
+      _controllers['fsc']?.text = '0';
       _calculate();
     });
-  }
-
-  void _showReportSummary() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Calculation Summary'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Date: ${DateTime.now().toString().substring(0, 16)}'),
-              const Divider(),
-              const Text('Inputs:', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('Fwd: ${_draftFwdController.text} m | Mid: ${_draftMidController.text} m | Aft: ${_draftAftController.text} m'),
-              Text('KTM: ${_ktmController.text} m | Beam: ${_beamController.text} m'),
-              Text('KM: ${_kmController.text} m | KG: ${_kgController.text} m | FSC: ${_fscController.text} m'),
-              const Divider(),
-              const Text('Results:', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('Quarter Mean Draft: $_calculatedMeanDraft'),
-              Text('Trim: $_calculatedTrim'),
-              Text('Air Draft: $_calculatedAirDraft'),
-              Text('Solid GM: $_calculatedSolidGM'),
-              Text('Fluid GM (GoM): $_calculatedFluidGM'),
-              Text('Est. Rolling Period: $_calculatedRollingPeriod'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showHistoryDialog() {
@@ -271,25 +219,42 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Saved History'),
+            title: const Text('Saved Calculations'),
             content: SizedBox(
               width: double.maxFinite,
-              height: 350,
-              child: _historyList.isEmpty
-                  ? const Center(child: Text('No saved history.'))
+              height: 380,
+              child: _savedHistory.isEmpty
+                  ? const Center(child: Text('No saved records found.'))
                   : ListView.builder(
-                      itemCount: _historyList.length,
+                      itemCount: _savedHistory.length,
                       itemBuilder: (context, index) {
-                        final item = _historyList[index];
+                        final item = _savedHistory[index];
                         return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
                           child: ListTile(
-                            title: Text('Date: ${item['date']}'),
-                            subtitle: Text('F/M/A: ${item['fwd']}/${item['mid']}/${item['aft']}m\nFluid GM: ${item['fluidGM']}'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteHistoryItem(index, setDialogState),
+                            title: Text(
+                              'Date: ${item['timestamp']}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
-                            onTap: () => _editHistoryItem(item),
+                            subtitle: Text(
+                              'Fwd/Aft: ${item['dfwd'] ?? '0'}m / ${item['daft'] ?? '0'}m | Disp: ${item['disp'] ?? '0'} MT',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.lightBlue),
+                                  tooltip: 'Load & Edit',
+                                  onPressed: () => _loadRecordToFields(item),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  tooltip: 'Delete',
+                                  onPressed: () => _deleteRecord(index, setDialogState),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -307,54 +272,143 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     );
   }
 
-  Widget _buildSectionCard({required String title, required List<Widget> children}) {
-    return Card(
-      elevation: 0,
-      color: widget.isDarkMode ? Colors.grey.shade900 : Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ship Stability Calculator', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'View History',
+            onPressed: _showHistoryDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.save),
+            tooltip: 'Save Record',
+            onPressed: _saveCurrentRecord,
+          ),
+          IconButton(
+            icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            tooltip: 'Toggle Light/Dark Mode',
+            onPressed: widget.onToggleTheme,
+          ),
+        ],
       ),
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildSectionCard('1. Particulars & Hydrostatics', [
+              _buildInput('Lightship / Lightweight (MT)', 'lightship'),
+              _buildInput('Current Displacement (MT)', 'disp'),
+              _buildInput('Moulded Depth - D (m)', 'depth'),
+              _buildInput('Keel to Mast Height - H (m)', 'mastHeight'),
+              _buildInput('Beam - B (m)', 'beam'),
+              _buildInput('TPC (Tons/cm)', 'tpc'),
+            ]),
+            _buildSectionCard('2. Draft & Hydrostatic Values', [
+              _buildInput('Draft Forward - Fwd (m)', 'dfwd'),
+              _buildInput('Draft Aft - Aft (m)', 'daft'),
+              _buildInput('KM (m)', 'km'),
+              _buildInput('KG (m)', 'kg'),
+              _buildInput('Free Surface Correction / FSC (m)', 'fsc'),
+            ]),
+            _buildSectionCard('3. Density Settings', [
+              _buildInput('Standard SW Density (t/m³)', 'swDensity'),
+              _buildInput('Dock Water Density (t/m³)', 'dockDensity'),
+            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: widget.isDarkMode ? const Color(0xFF0F172A) : Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: _saveCurrentRecord,
+                    icon: const Icon(Icons.save),
+                    label: const Text('CALCULATE & SAVE', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.isDarkMode ? Colors.blueGrey.shade700 : Colors.grey.shade400,
+                      foregroundColor: widget.isDarkMode ? Colors.white : Colors.black87,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: _reset,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('RESET'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildResultsCard(),
+            const SizedBox(height: 24),
+            // Developer Credit
             Text(
-              title,
+              'Developed by: Renante Fullo',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: widget.isDarkMode ? Colors.lightBlueAccent : const Color(0xFF1377A6),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: widget.isDarkMode ? Colors.white54 : Colors.black45,
+                letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 6),
-            const Divider(color: Colors.black26),
-            const SizedBox(height: 10),
-            ...children,
+            const SizedBox(height: 12),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInputField(TextEditingController controller, String labelText) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
+  Widget _buildSectionCard(String title, List<Widget> children) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title, 
+              style: TextStyle(
+                fontSize: 15, 
+                fontWeight: FontWeight.bold, 
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const Divider(height: 20),
+            Wrap(spacing: 12, runSpacing: 12, children: children),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInput(String label, String key) {
+    return SizedBox(
+      width: 150,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(labelText, style: TextStyle(fontSize: 13, color: widget.isDarkMode ? Colors.white70 : Colors.black87)),
-          const SizedBox(height: 6),
+          Text(label, style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white70 : Colors.black87)),
+          const SizedBox(height: 4),
           TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
+            controller: _controllers[key],
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontSize: 14),
+            decoration: const InputDecoration(
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.all(10),
             ),
             onChanged: (_) => _calculate(),
           ),
@@ -363,145 +417,72 @@ class _CalculatorHomeScreenState extends State<CalculatorHomeScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text(
-          'Ship Stability Calculator',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(widget.isDarkMode ? Icons.wb_sunny : Icons.nightlight_round),
-            tooltip: 'Dark / Light Mode',
-            onPressed: widget.onToggleDarkMode,
-          ),
-          IconButton(
-            icon: const Icon(Icons.assignment),
-            tooltip: 'Summary',
-            onPressed: _showReportSummary,
-          ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'History',
-            onPressed: _showHistoryDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save',
-            onPressed: _saveToHistory,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
+  Widget _buildResultsCard() {
+    return Card(
+      elevation: 2,
+      child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Ship Particulars
-            _buildSectionCard(
-              title: '1. Ship Particulars',
-              children: [
-                _buildInputField(_ktmController, 'Keel to Mast Head / KTM (m)'),
-                _buildInputField(_beamController, 'Ship Beam / Width (m)'),
-              ],
-            ),
-
-            // 2. Draft & Hydrostatic Values
-            _buildSectionCard(
-              title: '2. Draft & Hydrostatic Values',
-              children: [
-                _buildInputField(_draftFwdController, 'Draft Forward - Fwd (m)'),
-                _buildInputField(_draftMidController, 'Draft Midship - Mid (m)'),
-                _buildInputField(_draftAftController, 'Draft Aft - Aft (m)'),
-                _buildInputField(_kmController, 'KM (m)'),
-                _buildInputField(_kgController, 'KG (m)'),
-                _buildInputField(_fscController, 'Free Surface Correction / FSC (m)'),
-              ],
-            ),
-
-            // 3. Density Settings
-            _buildSectionCard(
-              title: '3. Density Settings',
-              children: [
-                _buildInputField(_swDensityController, 'Standard SW Density (t/m³)'),
-                _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)'),
-              ],
-            ),
-
-            // Calculated Results Card
-            Card(
-              elevation: 0,
-              color: widget.isDarkMode ? Colors.grey.shade800 : Colors.blue.shade50,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Calculated Results',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: widget.isDarkMode ? Colors.lightBlueAccent : const Color(0xFF1377A6),
-                        )),
-                    const Divider(),
-                    Text('Quarter Mean Draft: $_calculatedMeanDraft'),
-                    Text('Trim: $_calculatedTrim'),
-                    Text('Air Draft: $_calculatedAirDraft'),
-                    const SizedBox(height: 4),
-                    Text('Solid GM: $_calculatedSolidGM'),
-                    Text('Fluid GM (GoM): $_calculatedFluidGM',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                    Text('Est. Rolling Period: $_calculatedRollingPeriod',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
-                  ],
-                ),
+            Text(
+              'RESULTS OUTPUT', 
+              style: TextStyle(
+                fontSize: 15, 
+                fontWeight: FontWeight.bold, 
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Action Buttons
-            Row(
+            const Divider(height: 20),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              childAspectRatio: 2.2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _saveToHistory,
-                    icon: const Icon(Icons.save),
-                    label: const Text('CALCULATE & SAVE'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F2338),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _resetFields,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('RESET'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
+                _buildResultBox('Mean Draft', '${meanDraft.toStringAsFixed(3)} m'),
+                _buildResultBox('Trim (+Aft / -Fwd)', '${trim >= 0 ? "+" : ""}${trim.toStringAsFixed(3)} m'),
+                _buildResultBox('Freeboard', '${freeboard.toStringAsFixed(3)} m'),
+                _buildResultBox('Air Draft', '${airDraft.toStringAsFixed(3)} m'),
+                _buildResultBox('Deadweight (DWT)', '${dwt.toStringAsFixed(2)} MT', isHighlight: true),
+                _buildResultBox('Solid GM', '${gm.toStringAsFixed(3)} m'),
+                _buildResultBox('Fluid GM (GoM)', '${gom.toStringAsFixed(3)} m', isHighlight: true),
+                _buildResultBox('Rolling Period (T)', '${rollPeriod.toStringAsFixed(2)} sec'),
+                _buildResultBox('Draft Change (Dock)', '${(draftChangeMeters * 100).toStringAsFixed(2)} cm'),
+                _buildResultBox('New Draft in Dock', '${newMeanDraft.toStringAsFixed(3)} m'),
               ],
             ),
-            const SizedBox(height: 25),
-
-            // Developer Name Footer
-            const Center(
-              child: Text(
-                'Developer: Renante Fullo',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
-              ),
-            ),
-            const SizedBox(height: 15),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultBox(String label, String value, {bool isHighlight = false}) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: widget.isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+        border: Border(
+          left: BorderSide(
+            color: isHighlight 
+                ? (widget.isDarkMode ? Colors.greenAccent : Colors.green) 
+                : Theme.of(context).colorScheme.primary, 
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white60 : Colors.black54)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
