@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart0:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -80,10 +80,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   final fields = [
     'lightship', 'disp', 'depth', 'mastHeight', 'beam', 'tpc',
-    'dfwd', 'daft', 'km', 'kg', 'fsc', 'swDensity', 'dockDensity'
+    'dfwd', 'daft', 'km', 'kg', 'fsm', 'swDensity', 'dockDensity'
   ];
 
-  // Calculated values - nakadaklara sa loob ng State Class
+  // Calculated values
   double meanDraft = 0, trim = 0, freeboard = 0, airDraft = 0;
   double dwt = 0, gm = 0, gom = 0, rollPeriod = 0;
   double draftChangeMeters = 0, newMeanDraft = 0;
@@ -97,7 +97,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       _controllers[key] = TextEditingController();
     }
     _controllers['swDensity']?.text = '1.025';
-    _controllers['fsc']?.text = '0';
+    _controllers['fsm']?.text = '0';
     _loadHistory();
   }
 
@@ -157,7 +157,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     );
   }
 
-  // ANG _calculate FUNCTION NA NAKAPALOOB SA _CalculatorScreenState
   void _calculate() {
     double parse(String key) => double.tryParse(_controllers[key]?.text ?? '') ?? 0.0;
 
@@ -171,7 +170,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final daft = parse('daft');
     final km = parse('km');
     final kg = parse('kg');
-    final fsc = parse('fsc');
+    final fsm = parse('fsm'); // Total FSM in MT.m
     final swDensity = parse('swDensity') == 0 ? 1.025 : parse('swDensity');
     final dockDensity = parse('dockDensity');
 
@@ -181,7 +180,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       freeboard = depth > 0 ? depth - meanDraft : 0;
       airDraft = mastHeight > 0 ? mastHeight - meanDraft : 0;
       dwt = disp > lightship ? disp - lightship : 0;
+      
       gm = km - kg;
+      
+      // FSC = Total FSM / Displacement
+      double fsc = disp > 0 ? (fsm / disp) : 0.0;
       gom = gm - fsc;
 
       if (beam > 0 && gom > 0) {
@@ -191,20 +194,20 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       }
 
       // Draft Change with Fallback
-      if (dockDensity > 0 && disp > 0) {
+      final effectiveDockDensity = dockDensity > 0 ? dockDensity : swDensity;
+
+      if (disp > 0 && effectiveDockDensity != swDensity) {
         if (tpc > 0) {
-          // Standard Formula gamit ang TPC
-          double draftChangeCm = (disp * (swDensity - dockDensity)) / (tpc * dockDensity);
+          double draftChangeCm = (disp * (swDensity - effectiveDockDensity)) / (tpc * effectiveDockDensity);
           draftChangeMeters = draftChangeCm / 100;
         } else {
-          // Fallback Approximation kung walang TPC
           double estimatedFwaMeters = (disp / 10000) * 0.05;
-          draftChangeMeters = estimatedFwaMeters * ((swDensity - dockDensity) / 0.025);
+          draftChangeMeters = estimatedFwaMeters * ((swDensity - effectiveDockDensity) / 0.025);
         }
         newMeanDraft = meanDraft + draftChangeMeters;
       } else {
         draftChangeMeters = 0;
-        newMeanDraft = 0;
+        newMeanDraft = meanDraft;
       }
     });
   }
@@ -215,7 +218,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _controllers[key]?.clear();
       }
       _controllers['swDensity']?.text = '1.025';
-      _controllers['fsc']?.text = '0';
+      _controllers['fsm']?.text = '0';
       _calculate();
     });
   }
@@ -320,7 +323,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               _buildInput('Draft Aft - Aft (m)', 'daft'),
               _buildInput('KM (m)', 'km'),
               _buildInput('KG (m)', 'kg'),
-              _buildInput('Free Surface Correction / FSC (m)', 'fsc'),
+              _buildInput('Total FSM (MT·m)', 'fsm'), // NABAGO NA ANG LABEL SA FSM
             ]),
             _buildSectionCard('3. Density Settings', [
               _buildInput('Standard SW Density (t/m³)', 'swDensity'),
