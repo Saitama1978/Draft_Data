@@ -24,11 +24,14 @@ jobs:
 
       - name: Set up Android SDK, NDK, and CMake
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          cmdline-tools-version: 'latest'
 
-      - name: Install NDK and CMake required for Native Plugins
+      - name: Install NDK and CMake
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "cmake;3.22.1" "ndk;25.2.9519653"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1" "ndk;25.2.9519653"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
