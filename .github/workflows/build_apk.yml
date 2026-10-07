@@ -30,9 +30,18 @@ jobs:
       - name: Create Flutter Android Project Structure
         run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
 
-      - name: Fix Android V2 Embedding & Set App Name
+      - name: Fix Android V2 Embedding, Kotlin Version & App Name
         run: |
-          # 1. Gumawa ng tamang AndroidManifest.xml na may V2 Embedding metadata
+          # 1. Siguraduhing may mavenCentral() at google() sa repositories
+          if [ -f android/settings.gradle.kts ]; then
+            sed -i 's/kotlin-android.*/kotlin-android" version "1.9.10" apply false/' android/settings.gradle.kts || true
+          fi
+
+          if [ -f android/settings.gradle ]; then
+            sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.10"/' android/build.gradle || true
+          fi
+
+          # 2. Gumawa ng AndroidManifest.xml na may V2 Embedding at App Name
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -59,7 +68,7 @@ jobs:
           </manifest>
           EOF
 
-          # 2. Gumawa ng MainActivity.kt para sa Kotlin V2 Embedding
+          # 3. Gumawa ng MainActivity.kt para sa Kotlin V2 Embedding
           mkdir -p android/app/src/main/kotlin/com/renantefullo/shipcalc
           cat << 'EOF' > android/app/src/main/kotlin/com/renantefullo/shipcalc/MainActivity.kt
           package com.renantefullo.shipcalc
@@ -70,7 +79,7 @@ jobs:
           }
           EOF
 
-          # 3. I-update ang SDK version sa 34 para sa file_picker compatibility
+          # 4. Set compileSdk at targetSdk sa 34 para sa file_picker
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 34/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle || true
