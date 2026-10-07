@@ -30,12 +30,23 @@ jobs:
       - name: Create Flutter Android Project Structure
         run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
 
-      - name: Customize App Name and Fix Android SDK Version
+      - name: Fix Android V2 Embedding & App Name
         run: |
-          # 1. Palitan ang Pangalan ng App na lalabas sa Phone Screen
+          # 1. Siguraduhing Android V2 Embedding ang gamit sa MainActivity
+          mkdir -p android/app/src/main/kotlin/com/renantefullo/shipcalc
+          cat << 'EOF' > android/app/src/main/kotlin/com/renantefullo/shipcalc/MainActivity.kt
+          package com.renantefullo.shipcalc
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity: FlutterActivity() {
+          }
+          EOF
+
+          # 2. Palitan ang Pangalan ng App na lalabas sa Phone Screen
           sed -i 's/android:label=".*"/android:label="Draft Survey Pro"/' android/app/src/main/AndroidManifest.xml
-          
-          # 2. Ayusin ang compileSdk 34 error para sa file_picker
+
+          # 3. Ayusin ang compileSdk 34 para sa file_picker
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 34/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle || true
