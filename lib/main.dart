@@ -5,20 +5,22 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' as excel_pkg;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ShipStabilityApp());
+  runApp(const DraftSurveyProApp());
 }
 
-class ShipStabilityApp extends StatelessWidget {
-  const ShipStabilityApp({Key? key}) : super(key: key);
+class DraftSurveyProApp extends StatelessWidget {
+  const DraftSurveyProApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Ship Stability Calculator',
+      title: 'Draft Survey Pro',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF131B2E),
         primaryColor: const Color(0xFF38BDF8),
@@ -41,7 +43,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
   final List<Widget> _tabs = [
     const DraftSurveyTab(),
-    const Center(child: Text('Stability Calculations Tab', style: TextStyle(color: Colors.white))),
+    const HistoryLogTab(),
   ];
 
   @override
@@ -49,7 +51,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1D273D),
-        title: const Text('Ship Stability Calculator', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('Draft Survey Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Developer: 2/O Renante Fullo', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
+          ],
+        ),
       ),
       body: _tabs[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -68,14 +76,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             label: 'Draft Survey',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.directions_boat),
-            label: 'Stability',
+            icon: Icon(Icons.history),
+            label: 'History Log',
           ),
         ],
       ),
     );
   }
 }
+
+// Global Storage para sa History Logs
+List<Map<String, dynamic>> calculationHistory = [];
 
 class DraftSurveyTab extends StatefulWidget {
   const DraftSurveyTab({Key? key}) : super(key: key);
@@ -90,6 +101,10 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final Color primaryBlue = const Color(0xFF38BDF8);
   final Color buttonBlue = const Color(0xFF2563EB);
 
+  // Controllers
+  final _vesselNameController = TextEditingController();
+  final _portController = TextEditingController();
+
   final _fwdPortController = TextEditingController();
   final _fwdStbdController = TextEditingController();
   final _midPortController = TextEditingController();
@@ -97,8 +112,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final _aftPortController = TextEditingController();
   final _aftStbdController = TextEditingController();
 
-  final _vesselNameController = TextEditingController();
-  final _portController = TextEditingController();
   final _dockDensityController = TextEditingController(text: '1.025');
   final _lbpController = TextEditingController();
   final _rawDispController = TextEditingController();
@@ -154,11 +167,40 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
       totalDeductibles = lightship + ballast + vlsfo + lsmgo + mgo;
       netCargoDeadweight = correctedDisplacement - totalDeductibles;
+
+      // Save to History Log
+      calculationHistory.insert(0, {
+        'timestamp': DateTime.now().toString().substring(0, 16),
+        'vessel': _vesselNameController.text.isEmpty ? 'N/A' : _vesselNameController.text,
+        'port': _portController.text.isEmpty ? 'N/A' : _portController.text,
+        'quarterMean': quarterMean,
+        'correctedDisp': correctedDisplacement,
+        'netCargo': netCargoDeadweight,
+        'inputs': {
+          'fwdPort': _fwdPortController.text,
+          'fwdStbd': _fwdStbdController.text,
+          'midPort': _midPortController.text,
+          'midStbd': _midStbdController.text,
+          'aftPort': _aftPortController.text,
+          'aftStbd': _aftStbdController.text,
+          'rawDisp': _rawDispController.text,
+          'lbp': _lbpController.text,
+          'lcf': _lcfController.text,
+          'tpc': _tpcController.text,
+          'dMtc': _dMtcController.text,
+          'lightship': _lightshipController.text,
+          'ballast': _ballastController.text,
+          'vlsfo': _vlsfoController.text,
+          'lsmgo': _lsmgoController.text,
+        }
+      });
     });
   }
 
   void _resetFields() {
     setState(() {
+      _vesselNameController.clear();
+      _portController.clear();
       _fwdPortController.clear();
       _fwdStbdController.clear();
       _midPortController.clear();
@@ -182,6 +224,61 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     });
   }
 
+  // Hydrostatic Table Excel Import
+  Future<void> _importExcelHydrostatic() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      var bytes = File(result.files.single.path!).readAsBytesSync();
+      var excel = excel_pkg.Excel.decodeBytes(bytes);
+
+      for (var table in excel.tables.keys) {
+        var sheet = excel.tables[table];
+        if (sheet != null && sheet.maxRows > 1) {
+          var row = sheet.rows[1]; // Kunin ang unang row ng data
+          setState(() {
+            if (row.length > 0 && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
+            if (row.length > 1 && row[1]?.value != null) _lbpController.text = row[1]!.value.toString();
+            if (row.length > 2 && row[2]?.value != null) _lcfController.text = row[2]!.value.toString();
+            if (row.length > 3 && row[3]?.value != null) _tpcController.text = row[3]!.value.toString();
+            if (row.length > 4 && row[4]?.value != null) _dMtcController.text = row[4]!.value.toString();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Hydrostatic data loaded successfully!')),
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  // Export Data to Excel
+  Future<void> _exportExcelReport() async {
+    var excel = excel_pkg.Excel.createExcel();
+    excel_pkg.Sheet sheetObject = excel['Draft Survey Report'];
+    excel.delete('Sheet1');
+
+    sheetObject.appendRow([excel_pkg.TextCellValue('Draft Survey Report - Draft Survey Pro')]);
+    sheetObject.appendRow([excel_pkg.TextCellValue('Developer: 2/O Renante Fullo')]);
+    sheetObject.appendRow([]);
+    sheetObject.appendRow([excel_pkg.TextCellValue('Vessel Name'), excel_pkg.TextCellValue(_vesselNameController.text)]);
+    sheetObject.appendRow([excel_pkg.TextCellValue('Port'), excel_pkg.TextCellValue(_portController.text)]);
+    sheetObject.appendRow([excel_pkg.TextCellValue('Quarter Mean Draft'), excel_pkg.TextCellValue(quarterMean.toStringAsFixed(3))]);
+    sheetObject.appendRow([excel_pkg.TextCellValue('Corrected Displacement'), excel_pkg.TextCellValue(correctedDisplacement.toStringAsFixed(2))]);
+    sheetObject.appendRow([excel_pkg.TextCellValue('Net Cargo Deadweight'), excel_pkg.TextCellValue(netCargoDeadweight.toStringAsFixed(2))]);
+
+    Directory tempDir = await getTemporaryDirectory();
+    String filePath = "${tempDir.path}/Draft_Survey_Export.xlsx";
+    File(filePath)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(excel.encode()!);
+
+    await Share.shareXFiles([XFile(filePath)], text: 'Draft Survey Excel Export');
+  }
+
   Future<pw.Document> _generatePdfReport() async {
     final pdf = pw.Document();
 
@@ -195,7 +292,11 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Center(
-                  child: pw.Text('DRAFT SURVEY REPORT', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  child: pw.Text('DRAFT SURVEY REPORT', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Center(
+                  child: pw.Text('Draft Survey Pro | Dev: 2/O Renante Fullo', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
                 ),
                 pw.SizedBox(height: 10),
                 pw.Divider(),
@@ -302,6 +403,13 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           _buildSectionCard(
             title: '3. Hydrostatics & Density',
             children: [
+              ElevatedButton.icon(
+                onPressed: _importExcelHydrostatic,
+                icon: const Icon(Icons.file_upload, color: Colors.white),
+                label: const Text('IMPORT HYDROSTATIC EXCEL'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              ),
+              const SizedBox(height: 10),
               _buildInputField(_rawDispController, 'Table Displacement (MT)'),
               _buildInputField(_lbpController, 'LBP (m)'),
               _buildInputField(_lcfController, 'LCF (m)'),
@@ -338,10 +446,10 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _resetFields,
-                  icon: const Icon(Icons.refresh, color: Colors.white),
-                  label: const Text('RESET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                  label: const Text('CLEAR ALL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade700,
+                    backgroundColor: Colors.red.shade700,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -356,7 +464,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 child: OutlinedButton.icon(
                   onPressed: _printReport,
                   icon: Icon(Icons.print, color: primaryBlue),
-                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold)),
+                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: primaryBlue),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -364,12 +472,25 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _exportExcelReport,
+                  icon: const Icon(Icons.download, color: Colors.greenAccent),
+                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.greenAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _saveAndSharePdf,
                   icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.redAccent),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -487,6 +608,60 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
         ],
       ),
+    );
+  }
+}
+
+class HistoryLogTab extends StatefulWidget {
+  const HistoryLogTab({Key? key}) : super(key: key);
+
+  @override
+  State<HistoryLogTab> createState() => _HistoryLogTabState();
+}
+
+class _HistoryLogTabState extends State<HistoryLogTab> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF131B2E),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1D273D),
+        title: const Text('Calculation History Log', style: TextStyle(fontSize: 16)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+            onPressed: () {
+              setState(() {
+                calculationHistory.clear();
+              });
+            },
+          )
+        ],
+      ),
+      body: calculationHistory.isEmpty
+          ? const Center(child: Text('No History Logs Available', style: TextStyle(color: Colors.white54)))
+          : ListView.builder(
+              itemCount: calculationHistory.length,
+              itemBuilder: (context, index) {
+                final item = calculationHistory[index];
+                return Card(
+                  color: const Color(0xFF1D273D),
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: ListTile(
+                    title: Text('${item['vessel']} - ${item['port']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Date: ${item['timestamp']}\nCargo: ${item['netCargo'].toStringAsFixed(2)} MT', style: const TextStyle(color: Colors.white70)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          calculationHistory.removeAt(index);
+                        });
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
