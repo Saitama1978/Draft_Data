@@ -6,7 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart' as excel_pkg;
+import 'package:excel/excel.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -176,23 +176,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
         'quarterMean': quarterMean,
         'correctedDisp': correctedDisplacement,
         'netCargo': netCargoDeadweight,
-        'inputs': {
-          'fwdPort': _fwdPortController.text,
-          'fwdStbd': _fwdStbdController.text,
-          'midPort': _midPortController.text,
-          'midStbd': _midStbdController.text,
-          'aftPort': _aftPortController.text,
-          'aftStbd': _aftStbdController.text,
-          'rawDisp': _rawDispController.text,
-          'lbp': _lbpController.text,
-          'lcf': _lcfController.text,
-          'tpc': _tpcController.text,
-          'dMtc': _dMtcController.text,
-          'lightship': _lightshipController.text,
-          'ballast': _ballastController.text,
-          'vlsfo': _vlsfoController.text,
-          'lsmgo': _lsmgoController.text,
-        }
       });
     });
   }
@@ -233,12 +216,12 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
     if (result != null && result.files.single.path != null) {
       var bytes = File(result.files.single.path!).readAsBytesSync();
-      var excel = excel_pkg.Excel.decodeBytes(bytes);
+      var excel = Excel.decodeBytes(bytes);
 
       for (var table in excel.tables.keys) {
         var sheet = excel.tables[table];
         if (sheet != null && sheet.maxRows > 1) {
-          var row = sheet.rows[1]; // Kunin ang unang row ng data
+          var row = sheet.rows[1];
           setState(() {
             if (row.length > 0 && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
             if (row.length > 1 && row[1]?.value != null) _lbpController.text = row[1]!.value.toString();
@@ -257,24 +240,24 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
   // Export Data to Excel
   Future<void> _exportExcelReport() async {
-    var excel = excel_pkg.Excel.createExcel();
-    excel_pkg.Sheet sheetObject = excel['Draft Survey Report'];
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Draft Survey Report'];
     excel.delete('Sheet1');
 
-    sheetObject.appendRow([excel_pkg.TextCellValue('Draft Survey Report - Draft Survey Pro')]);
-    sheetObject.appendRow([excel_pkg.TextCellValue('Developer: 2/O Renante Fullo')]);
+    sheetObject.appendRow(['Draft Survey Report - Draft Survey Pro']);
+    sheetObject.appendRow(['Developer: 2/O Renante Fullo']);
     sheetObject.appendRow([]);
-    sheetObject.appendRow([excel_pkg.TextCellValue('Vessel Name'), excel_pkg.TextCellValue(_vesselNameController.text)]);
-    sheetObject.appendRow([excel_pkg.TextCellValue('Port'), excel_pkg.TextCellValue(_portController.text)]);
-    sheetObject.appendRow([excel_pkg.TextCellValue('Quarter Mean Draft'), excel_pkg.TextCellValue(quarterMean.toStringAsFixed(3))]);
-    sheetObject.appendRow([excel_pkg.TextCellValue('Corrected Displacement'), excel_pkg.TextCellValue(correctedDisplacement.toStringAsFixed(2))]);
-    sheetObject.appendRow([excel_pkg.TextCellValue('Net Cargo Deadweight'), excel_pkg.TextCellValue(netCargoDeadweight.toStringAsFixed(2))]);
+    sheetObject.appendRow(['Vessel Name', _vesselNameController.text]);
+    sheetObject.appendRow(['Port', _portController.text]);
+    sheetObject.appendRow(['Quarter Mean Draft', quarterMean.toStringAsFixed(3)]);
+    sheetObject.appendRow(['Corrected Displacement', correctedDisplacement.toStringAsFixed(2)]);
+    sheetObject.appendRow(['Net Cargo Deadweight', netCargoDeadweight.toStringAsFixed(2)]);
 
     Directory tempDir = await getTemporaryDirectory();
     String filePath = "${tempDir.path}/Draft_Survey_Export.xlsx";
-    File(filePath)
-      ..createSync(recursive: true)
-      ..writeAsBytesSync(excel.encode()!);
+    File file = File(filePath);
+    await file.create(recursive: true);
+    await file.writeAsBytes(excel.encode()!);
 
     await Share.shareXFiles([XFile(filePath)], text: 'Draft Survey Excel Export');
   }
@@ -464,7 +447,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 child: OutlinedButton.icon(
                   onPressed: _printReport,
                   icon: Icon(Icons.print, color: primaryBlue),
-                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 12)),
+                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 11)),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: primaryBlue),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -472,12 +455,12 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _exportExcelReport,
                   icon: const Icon(Icons.download, color: Colors.greenAccent),
-                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.greenAccent),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -485,12 +468,12 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _saveAndSharePdf,
                   icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.redAccent),
                     padding: const EdgeInsets.symmetric(vertical: 12),
