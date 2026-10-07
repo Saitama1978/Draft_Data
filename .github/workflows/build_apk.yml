@@ -35,7 +35,7 @@ jobs:
       - name: Create Flutter Android Project Structure
         run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
 
-      - name: Fix Android Files, SDK 36 & App Name
+      - name: Fix Android SDK 36 Global Override, V2 Embedding & App Name
         run: |
           # 1. Burahin ang duplicate .kts file
           rm -f android/app/build.gradle.kts
@@ -78,7 +78,21 @@ jobs:
           }
           EOF
 
-          # 4. Baguhin ang compileSdk at targetSdk sa 36
+          # 4. Puwersahin ang LAHAT ng plugins/dependencies na gumamit ng compileSdk 36
+          cat << 'EOF' >> android/build.gradle
+
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 36
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # 5. Baguhin din ang app-level build.gradle sa compileSdk 36
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
