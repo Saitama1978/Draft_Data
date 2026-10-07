@@ -1,14 +1,10 @@
-import 'dart:io';
+import 'dart0:io';
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets' as pw;
+import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-// ==========================================
-// 1. MAIN ENTRY POINT (Inaayos ang Build Error)
-// ==========================================
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ShipStabilityApp());
@@ -32,9 +28,6 @@ class ShipStabilityApp extends StatelessWidget {
   }
 }
 
-// ==========================================
-// 2. MAIN HOME SCREEN (NAVIGATION TABS)
-// ==========================================
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({Key? key}) : super(key: key);
 
@@ -56,20 +49,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1D273D),
         title: const Text('Ship Stability Calculator', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.wb_sunny_outlined),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: _tabs[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -83,8 +62,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           });
         },
         items: const [
-          BottomNavigationBarThemeData(
-          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calculate),
             label: 'Draft Survey',
@@ -99,9 +76,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   }
 }
 
-// ==========================================
-// 3. DRAFT SURVEY TAB (WITH PRINT & SAVE PDF)
-// ==========================================
 class DraftSurveyTab extends StatefulWidget {
   const DraftSurveyTab({Key? key}) : super(key: key);
 
@@ -110,13 +84,11 @@ class DraftSurveyTab extends StatefulWidget {
 }
 
 class _DraftSurveyTabState extends State<DraftSurveyTab> {
-  // Theme Colors
   final Color bgColor = const Color(0xFF131B2E);
   final Color cardColor = const Color(0xFF1D273D);
   final Color primaryBlue = const Color(0xFF38BDF8);
   final Color buttonBlue = const Color(0xFF2563EB);
 
-  // Controllers
   final _fwdPortController = TextEditingController();
   final _fwdStbdController = TextEditingController();
   final _midPortController = TextEditingController();
@@ -124,8 +96,8 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final _aftPortController = TextEditingController();
   final _aftStbdController = TextEditingController();
 
-  final _vesselNameController = TextEditingController(text: 'M/V OCEAN GEM');
-  final _portController = TextEditingController(text: 'MANILA');
+  final _vesselNameController = TextEditingController();
+  final _portController = TextEditingController();
   final _dockDensityController = TextEditingController(text: '1.025');
   final _lbpController = TextEditingController();
   final _rawDispController = TextEditingController();
@@ -139,7 +111,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final _lsmgoController = TextEditingController();
   final _mgoController = TextEditingController();
 
-  // Results Variables
   double meanFwd = 0.0, meanMid = 0.0, meanAft = 0.0;
   double apparentTrim = 0.0, quarterMean = 0.0;
   double ftc = 0.0, stc = 0.0, correctedDisplacement = 0.0;
@@ -210,7 +181,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     });
   }
 
-  // Generate PDF (Walang Pangalan ng Developer)
   Future<pw.Document> _generatePdfReport() async {
     final pdf = pw.Document();
 
@@ -224,10 +194,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Center(
-                  child: pw.Text(
-                    'DRAFT SURVEY REPORT',
-                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-                  ),
+                  child: pw.Text('DRAFT SURVEY REPORT', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.SizedBox(height: 10),
                 pw.Divider(),
@@ -305,7 +272,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
-          // Particulars
           _buildSectionCard(
             title: '1. Vessel Particulars & Port',
             children: [
@@ -318,8 +284,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               ),
             ],
           ),
-
-          // Draft Observations
           _buildSectionCard(
             title: '2. Draft Observations (m)',
             children: [
@@ -346,8 +310,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               ),
             ],
           ),
-
-          // Hydrostatics
           _buildSectionCard(
             title: '3. Hydrostatics & Density',
             children: [
@@ -359,8 +321,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)'),
             ],
           ),
-
-          // Deductibles
           _buildSectionCard(
             title: '4. Deductibles (MT)',
             children: [
@@ -370,10 +330,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               _buildInputField(_lsmgoController, 'LSMGO / Diesel Oil'),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // BUTTONS: CALCULATE & RESET
           Row(
             children: [
               Expanded(
@@ -404,8 +361,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
             ],
           ),
           const SizedBox(height: 10),
-
-          // BUTTONS: PRINT REPORT & SAVE PDF
           Row(
             children: [
               Expanded(
@@ -435,10 +390,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // RESULTS OUTPUT
           _buildSectionCard(
             title: 'RESULTS OUTPUT',
             children: [
@@ -509,6 +461,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       child: TextField(
         controller: controller,
         style: const TextStyle(color: Colors.white),
+        keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(color: Colors.white70, fontSize: 13),
