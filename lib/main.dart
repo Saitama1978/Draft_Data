@@ -6,6 +6,102 @@ import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+// ==========================================
+// 1. MAIN ENTRY POINT (Inaayos ang Build Error)
+// ==========================================
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ShipStabilityApp());
+}
+
+class ShipStabilityApp extends StatelessWidget {
+  const ShipStabilityApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Ship Stability Calculator',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF131B2E),
+        primaryColor: const Color(0xFF38BDF8),
+        cardColor: const Color(0xFF1D273D),
+      ),
+      home: const MainHomeScreen(),
+    );
+  }
+}
+
+// ==========================================
+// 2. MAIN HOME SCREEN (NAVIGATION TABS)
+// ==========================================
+class MainHomeScreen extends StatefulWidget {
+  const MainHomeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<MainHomeScreen> createState() => _MainHomeScreenState();
+}
+
+class _MainHomeScreenState extends State<MainHomeScreen> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _tabs = [
+    const DraftSurveyTab(),
+    const Center(child: Text('Stability Calculations Tab', style: TextStyle(color: Colors.white))),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1D273D),
+        title: const Text('Ship Stability Calculator', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.wb_sunny_outlined),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: _tabs[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: const Color(0xFF1D273D),
+        selectedItemColor: const Color(0xFF38BDF8),
+        unselectedItemColor: Colors.white54,
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarThemeData(
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calculate),
+            label: 'Draft Survey',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.directions_boat),
+            label: 'Stability',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 3. DRAFT SURVEY TAB (WITH PRINT & SAVE PDF)
+// ==========================================
 class DraftSurveyTab extends StatefulWidget {
   const DraftSurveyTab({Key? key}) : super(key: key);
 
@@ -14,7 +110,7 @@ class DraftSurveyTab extends StatefulWidget {
 }
 
 class _DraftSurveyTabState extends State<DraftSurveyTab> {
-  // Color Palette mula sa iyong UI
+  // Theme Colors
   final Color bgColor = const Color(0xFF131B2E);
   final Color cardColor = const Color(0xFF1D273D);
   final Color primaryBlue = const Color(0xFF38BDF8);
@@ -28,8 +124,8 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final _aftPortController = TextEditingController();
   final _aftStbdController = TextEditingController();
 
-  final _vesselNameController = TextEditingController();
-  final _portController = TextEditingController();
+  final _vesselNameController = TextEditingController(text: 'M/V OCEAN GEM');
+  final _portController = TextEditingController(text: 'MANILA');
   final _dockDensityController = TextEditingController(text: '1.025');
   final _lbpController = TextEditingController();
   final _rawDispController = TextEditingController();
@@ -98,6 +194,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       _aftPortController.clear();
       _aftStbdController.clear();
       _rawDispController.clear();
+      _lbpController.clear();
       _lcfController.clear();
       _tpcController.clear();
       _dMtcController.clear();
@@ -106,14 +203,14 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       _vlsfoController.clear();
       _lsmgoController.clear();
       _mgoController.clear();
-      
+
       meanFwd = meanMid = meanAft = 0.0;
       apparentTrim = quarterMean = ftc = stc = 0.0;
       correctedDisplacement = totalDeductibles = netCargoDeadweight = 0.0;
     });
   }
 
-  // PDF Report Generation (Walang Developer Name)
+  // Generate PDF (Walang Pangalan ng Developer)
   Future<pw.Document> _generatePdfReport() async {
     final pdf = pw.Document();
 
@@ -159,7 +256,8 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 pw.SizedBox(height: 5),
                 pw.Bullet(text: 'Quarter Mean Draft: ${quarterMean.toStringAsFixed(3)} m'),
                 pw.Bullet(text: 'Apparent Trim: ${apparentTrim.toStringAsFixed(3)} m'),
-                pw.Bullet(text: 'Trim Corrected Displacement: ${correctedDisplacement.toStringAsFixed(2)} MT'),
+                pw.Bullet(text: 'FTC: ${ftc.toStringAsFixed(2)} MT | STC: ${stc.toStringAsFixed(2)} MT'),
+                pw.Bullet(text: 'Corrected Displacement: ${correctedDisplacement.toStringAsFixed(2)} MT'),
                 pw.SizedBox(height: 15),
                 pw.Text('3. DEDUCTIBLES & CARGO', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 5),
@@ -203,172 +301,185 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // SECTION 1: DRAFT OBSERVATIONS
-            _buildSectionCard(
-              title: '1. Draft Observations (m)',
-              children: [
-                Row(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // Particulars
+          _buildSectionCard(
+            title: '1. Vessel Particulars & Port',
+            children: [
+              Row(
+                children: [
+                  Expanded(child: _buildInputField(_vesselNameController, 'Vessel Name')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildInputField(_portController, 'Port')),
+                ],
+              ),
+            ],
+          ),
+
+          // Draft Observations
+          _buildSectionCard(
+            title: '2. Draft Observations (m)',
+            children: [
+              Row(
+                children: [
+                  Expanded(child: _buildInputField(_fwdPortController, 'Fwd Port')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildInputField(_fwdStbdController, 'Fwd Stbd')),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(child: _buildInputField(_midPortController, 'Mid Port')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildInputField(_midStbdController, 'Mid Stbd')),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(child: _buildInputField(_aftPortController, 'Aft Port')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildInputField(_aftStbdController, 'Aft Stbd')),
+                ],
+              ),
+            ],
+          ),
+
+          // Hydrostatics
+          _buildSectionCard(
+            title: '3. Hydrostatics & Density',
+            children: [
+              _buildInputField(_rawDispController, 'Table Displacement (MT)'),
+              _buildInputField(_lbpController, 'LBP (m)'),
+              _buildInputField(_lcfController, 'LCF (m)'),
+              _buildInputField(_tpcController, 'TPC (Tons/cm)'),
+              _buildInputField(_dMtcController, 'dMTC'),
+              _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)'),
+            ],
+          ),
+
+          // Deductibles
+          _buildSectionCard(
+            title: '4. Deductibles (MT)',
+            children: [
+              _buildInputField(_lightshipController, 'Lightship / Lightweight'),
+              _buildInputField(_ballastController, 'Ballast Water'),
+              _buildInputField(_vlsfoController, 'VLSFO / Fuel Oil'),
+              _buildInputField(_lsmgoController, 'LSMGO / Diesel Oil'),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // BUTTONS: CALCULATE & RESET
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _calculateSurvey,
+                  icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+                  label: const Text('CALCULATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: buttonBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _resetFields,
+                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  label: const Text('RESET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // BUTTONS: PRINT REPORT & SAVE PDF
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _printReport,
+                  icon: Icon(Icons.print, color: primaryBlue),
+                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: primaryBlue),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saveAndSharePdf,
+                  icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // RESULTS OUTPUT
+          _buildSectionCard(
+            title: 'RESULTS OUTPUT',
+            children: [
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                childAspectRatio: 2.2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                children: [
+                  _buildResultTile('Quarter Mean', '${quarterMean.toStringAsFixed(3)} m'),
+                  _buildResultTile('Apparent Trim', '${apparentTrim.toStringAsFixed(3)} m'),
+                  _buildResultTile('1st Correction (FTC)', '${ftc.toStringAsFixed(2)} MT'),
+                  _buildResultTile('2nd Correction (STC)', '${stc.toStringAsFixed(2)} MT'),
+                  _buildResultTile('Corrected Disp', '${correctedDisplacement.toStringAsFixed(2)} MT'),
+                  _buildResultTile('Total Deductibles', '${totalDeductibles.toStringAsFixed(2)} MT'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.greenAccent),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(child: _buildInputField(_fwdPortController, 'Fwd Port')),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildInputField(_fwdStbdController, 'Fwd Stbd')),
+                    const Text('NET CARGO DEADWEIGHT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${netCargoDeadweight.toStringAsFixed(2)} MT',
+                      style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
-                Row(
-                  children: [
-                    Expanded(child: _buildInputField(_midPortController, 'Mid Port')),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildInputField(_midStbdController, 'Mid Stbd')),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Expanded(child: _buildInputField(_aftPortController, 'Aft Port')),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildInputField(_aftStbdController, 'Aft Stbd')),
-                  ],
-                ),
-              ],
-            ),
-
-            // SECTION 2: HYDROSTATICS & DENSITY
-            _buildSectionCard(
-              title: '2. Hydrostatics & Density',
-              children: [
-                _buildInputField(_rawDispController, 'Table Displacement (MT)'),
-                _buildInputField(_lbpController, 'LBP (m)'),
-                _buildInputField(_lcfController, 'LCF (m)'),
-                _buildInputField(_tpcController, 'TPC (Tons/cm)'),
-                _buildInputField(_dMtcController, 'dMTC'),
-                _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)'),
-              ],
-            ),
-
-            // SECTION 3: DEDUCTIBLES
-            _buildSectionCard(
-              title: '3. Deductibles (MT)',
-              children: [
-                _buildInputField(_lightshipController, 'Lightship / Lightweight'),
-                _buildInputField(_ballastController, 'Ballast Water'),
-                _buildInputField(_vlsfoController, 'VLSFO / Fuel Oil'),
-                _buildInputField(_lsmgoController, 'LSMGO / Diesel Oil'),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // ACTION BUTTONS: CALCULATE, RESET, PRINT, SAVE
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _calculateSurvey,
-                    icon: const Icon(Icons.check_circle_outline, color: Colors.white),
-                    label: const Text('CALCULATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: buttonBlue,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _resetFields,
-                    icon: const Icon(Icons.refresh, color: Colors.white),
-                    label: const Text('RESET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _printReport,
-                    icon: Icon(Icons.print, color: primaryBlue),
-                    label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: primaryBlue),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saveAndSharePdf,
-                    icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                    label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.redAccent),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // RESULTS OUTPUT GRID (Gaya ng UI mo)
-            _buildSectionCard(
-              title: 'RESULTS OUTPUT',
-              children: [
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  childAspectRatio: 2.2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  children: [
-                    _buildResultTile('Quarter Mean', '${quarterMean.toStringAsFixed(3)} m'),
-                    _buildResultTile('Apparent Trim', '${apparentTrim.toStringAsFixed(3)} m'),
-                    _buildResultTile('1st Correction (FTC)', '${ftc.toStringAsFixed(2)} MT'),
-                    _buildResultTile('2nd Correction (STC)', '${stc.toStringAsFixed(2)} MT'),
-                    _buildResultTile('Corrected Disp', '${correctedDisplacement.toStringAsFixed(2)} MT'),
-                    _buildResultTile('Total Deductibles', '${totalDeductibles.toStringAsFixed(2)} MT'),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.greenAccent),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('NET CARGO DEADWEIGHT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      Text(
-                        '${netCargoDeadweight.toStringAsFixed(2)} MT',
-                        style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -384,10 +495,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(color: primaryBlue, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          Text(title, style: TextStyle(color: primaryBlue, fontSize: 16, fontWeight: FontWeight.bold)),
           const Divider(color: Colors.white24, height: 20),
           ...children,
         ],
@@ -401,7 +509,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       child: TextField(
         controller: controller,
         style: const TextStyle(color: Colors.white),
-        keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(color: Colors.white70, fontSize: 13),
