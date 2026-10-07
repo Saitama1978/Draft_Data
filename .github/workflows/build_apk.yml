@@ -120,6 +120,11 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
+      - name: Locate and Move APK Output
+        run: |
+          mkdir -p build/app/outputs/flutter-apk
+          find build/ -name "*.apk" -exec cp {} build/app/outputs/flutter-apk/app-release.apk \;
+
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
