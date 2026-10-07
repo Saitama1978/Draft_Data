@@ -6,7 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -244,14 +244,14 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     Sheet sheetObject = excel['Draft Survey Report'];
     excel.delete('Sheet1');
 
-    sheetObject.appendRow(['Draft Survey Report - Draft Survey Pro']);
-    sheetObject.appendRow(['Developer: 2/O Renante Fullo']);
+    sheetObject.appendRow([TextCellValue('Draft Survey Report - Draft Survey Pro')]);
+    sheetObject.appendRow([TextCellValue('Developer: 2/O Renante Fullo')]);
     sheetObject.appendRow([]);
-    sheetObject.appendRow(['Vessel Name', _vesselNameController.text]);
-    sheetObject.appendRow(['Port', _portController.text]);
-    sheetObject.appendRow(['Quarter Mean Draft', quarterMean.toStringAsFixed(3)]);
-    sheetObject.appendRow(['Corrected Displacement', correctedDisplacement.toStringAsFixed(2)]);
-    sheetObject.appendRow(['Net Cargo Deadweight', netCargoDeadweight.toStringAsFixed(2)]);
+    sheetObject.appendRow([TextCellValue('Vessel Name'), TextCellValue(_vesselNameController.text)]);
+    sheetObject.appendRow([TextCellValue('Port'), TextCellValue(_portController.text)]);
+    sheetObject.appendRow([TextCellValue('Quarter Mean Draft'), TextCellValue(quarterMean.toStringAsFixed(3))]);
+    sheetObject.appendRow([TextCellValue('Corrected Displacement'), TextCellValue(correctedDisplacement.toStringAsFixed(2))]);
+    sheetObject.appendRow([TextCellValue('Net Cargo Deadweight'), TextCellValue(netCargoDeadweight.toStringAsFixed(2))]);
 
     Directory tempDir = await getTemporaryDirectory();
     String filePath = "${tempDir.path}/Draft_Survey_Export.xlsx";
