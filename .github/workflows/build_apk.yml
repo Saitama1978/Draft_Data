@@ -30,12 +30,12 @@ jobs:
       - name: Create Flutter Android Project Structure
         run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
 
-      - name: Fix Build Files, SDK 36, and App Name
+      - name: Fix Android Files, SDK 36 & App Name
         run: |
-          # 1. Burahin ang paulit-ulit na .kts build file para walang conflict
+          # 1. Burahin ang nagkakasalungat na .kts file
           rm -f android/app/build.gradle.kts
 
-          # 2. Gumawa ng AndroidManifest.xml na may V2 Embedding at App Name
+          # 2. Lumikha ng opisyal na AndroidManifest.xml na may V2 Embedding at App Name
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -62,7 +62,7 @@ jobs:
           </manifest>
           EOF
 
-          # 3. Gumawa ng MainActivity.kt para sa Kotlin V2 Embedding
+          # 3. Lumikha ng Kotlin MainActivity
           mkdir -p android/app/src/main/kotlin/com/renantefullo/shipcalc
           cat << 'EOF' > android/app/src/main/kotlin/com/renantefullo/shipcalc/MainActivity.kt
           package com.renantefullo.shipcalc
@@ -73,10 +73,13 @@ jobs:
           }
           EOF
 
-          # 4. Baguhin ang compileSdk at targetSdk sa 36 (para sa shared_preferences)
+          # 4. Ayusin ang compileSdk sa 36 at i-disable ang CMake auto-download sa build.gradle
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
+
+          # 5. Huwag paganahin ang paghahanap ng CMake kung hindi naman kailangan
+          echo "android.builder.sdkDownload=false" >> android/gradle.properties || true
 
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
