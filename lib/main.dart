@@ -75,9 +75,9 @@ class MainHomeScreen extends StatefulWidget {
 class _MainHomeScreenState extends State<MainHomeScreen> {
   int _selectedIndex = 0;
 
-  void _switchToSurveyTab() {
+  void _switchToTab(int index) {
     setState(() {
-      _selectedIndex = 0;
+      _selectedIndex = index;
     });
   }
 
@@ -87,7 +87,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
     final List<Widget> tabs = [
       const DraftSurveyTab(),
-      HistoryLogTab(onLoadHistoryItem: _switchToSurveyTab),
+      const TankSoundingTab(),
+      HistoryLogTab(onLoadHistoryItem: () => _switchToTab(0)),
     ];
 
     return Scaffold(
@@ -96,7 +97,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Text('Draft Survey Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text('Developer: 2/O Renante Fullo', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
+            Text('Professional Ship Stability Suite', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
           ],
         ),
         actions: [
@@ -133,6 +134,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             label: 'Draft Survey',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.water_damage),
+            label: 'Tanks Sounding',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.history),
             label: 'History Log',
           ),
@@ -143,9 +148,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 List<Map<String, dynamic>> calculationHistory = [];
-
-// Global Callback para sa pag-load ng data mula sa history
 Function(Map<String, dynamic>)? loadHistoryToSurveyCallback;
+Function(double ballast, double vlsfo, double lsmgo, double fw)? updateDeductiblesCallback;
 
 class DraftSurveyTab extends StatefulWidget {
   const DraftSurveyTab({super.key});
@@ -155,7 +159,6 @@ class DraftSurveyTab extends StatefulWidget {
 }
 
 class _DraftSurveyTabState extends State<DraftSurveyTab> {
-  // Controllers
   final _vesselNameController = TextEditingController();
   final _portController = TextEditingController();
   final _chiefOfficerController = TextEditingController();
@@ -169,6 +172,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final _aftStbdController = TextEditingController();
 
   final _dockDensityController = TextEditingController(text: '1.025');
+  final _waterTempController = TextEditingController(text: '15.0');
   final _lbpController = TextEditingController();
   final _rawDispController = TextEditingController();
   final _lcfController = TextEditingController();
@@ -179,12 +183,14 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   final _ballastController = TextEditingController();
   final _vlsfoController = TextEditingController();
   final _lsmgoController = TextEditingController();
-  final _mgoController = TextEditingController();
+  final _freshWaterController = TextEditingController();
 
   double meanFwd = 0.0, meanMid = 0.0, meanAft = 0.0;
   double apparentTrim = 0.0, quarterMean = 0.0;
   double ftc = 0.0, stc = 0.0, correctedDisplacement = 0.0;
   double totalDeductibles = 0.0, netCargoDeadweight = 0.0;
+  String hullCondition = 'Flat / Normal';
+  String surveyStage = 'Initial Survey';
 
   List<List<double>> _loadedHydroTable = [];
   bool _hasSavedHydroData = false;
@@ -194,6 +200,17 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     super.initState();
     _loadSavedHydrostaticTable();
     loadHistoryToSurveyCallback = _populateFormFromHistory;
+    updateDeductiblesCallback = _updateDeductiblesFromTanks;
+  }
+
+  void _updateDeductiblesFromTanks(double ballast, double vlsfo, double lsmgo, double fw) {
+    setState(() {
+      _ballastController.text = ballast.toStringAsFixed(2);
+      _vlsfoController.text = vlsfo.toStringAsFixed(2);
+      _lsmgoController.text = lsmgo.toStringAsFixed(2);
+      _freshWaterController.text = fw.toStringAsFixed(2);
+      _calculateSurvey();
+    });
   }
 
   void _populateFormFromHistory(Map<String, dynamic> item) {
@@ -221,19 +238,18 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       _ballastController.text = item['ballast'] ?? '';
       _vlsfoController.text = item['vlsfo'] ?? '';
       _lsmgoController.text = item['lsmgo'] ?? '';
-      _mgoController.text = item['mgo'] ?? '';
+      _freshWaterController.text = item['fw'] ?? '';
 
       _calculateSurvey();
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('History item loaded successfully for editing!')),
-    );
   }
 
   Future<void> _loadSavedHydrostaticTable() async {
     final prefs = await SharedPreferences.getInstance();
-    String? jsonString = prefs.getString('saved_hydro_table');
+    String key = 'saved_hydro_${_vesselNameController.text.trim()}';
+    if (key.isEmpty) key = 'saved_hydro_default';
+
+    String? jsonString = prefs.getString(key);
     if (jsonString != null && jsonString.isNotEmpty) {
       List<dynamic> decoded = jsonDecode(jsonString);
       setState(() {
@@ -245,29 +261,15 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
   Future<void> _saveHydrostaticTableToStorage(List<List<double>> table) async {
     final prefs = await SharedPreferences.getInstance();
+    String key = 'saved_hydro_${_vesselNameController.text.trim()}';
+    if (_vesselNameController.text.trim().isEmpty) key = 'saved_hydro_default';
+
     String jsonString = jsonEncode(table);
-    await prefs.setString('saved_hydro_table', jsonString);
+    await prefs.setString(key, jsonString);
     setState(() {
       _loadedHydroTable = table;
       _hasSavedHydroData = true;
     });
-  }
-
-  Future<void> _clearSavedHydrostaticTable() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('saved_hydro_table');
-    setState(() {
-      _loadedHydroTable.clear();
-      _hasSavedHydroData = false;
-      _rawDispController.clear();
-      _lbpController.clear();
-      _lcfController.clear();
-      _tpcController.clear();
-      _dMtcController.clear();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Hydrostatic table cleared!')),
-    );
   }
 
   void _calculateSurvey() {
@@ -286,6 +288,16 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       apparentTrim = meanAft - meanFwd;
       quarterMean = (meanFwd + (6 * meanMid) + meanAft) / 8;
 
+      double meanEnds = (meanFwd + meanAft) / 2;
+      double hogSagValue = meanMid - meanEnds;
+      if (hogSagValue > 0.01) {
+        hullCondition = 'Sagging (${hogSagValue.toStringAsFixed(3)} m)';
+      } else if (hogSagValue < -0.01) {
+        hullCondition = 'Hogging (${hogSagValue.abs().toStringAsFixed(3)} m)';
+      } else {
+        hullCondition = 'Flat / Normal';
+      }
+
       if (_loadedHydroTable.isNotEmpty) {
         _applyInterpolationFromLoadedTable(quarterMean);
       }
@@ -295,24 +307,26 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       double tpc = double.tryParse(_tpcController.text) ?? 0.0;
       double lbp = double.tryParse(_lbpController.text) ?? 1.0;
       double dMtc = double.tryParse(_dMtcController.text) ?? 0.0;
-      double dockDensity = double.tryParse(_dockDensityController.text) ?? 1.025;
+
+      double observedDensity = double.tryParse(_dockDensityController.text) ?? 1.025;
+      double temp = double.tryParse(_waterTempController.text) ?? 15.0;
+      double tempCorrectedDensity = observedDensity + ((15.0 - temp) * 0.0002);
 
       ftc = (apparentTrim * lcf * tpc * 100) / (lbp == 0 ? 1 : lbp);
       stc = (apparentTrim * apparentTrim * 50 * dMtc) / (lbp == 0 ? 1 : lbp);
 
       double trimCorrectedDisp = rawDisp + ftc + stc;
-      correctedDisplacement = trimCorrectedDisp * (dockDensity / 1.025);
+      correctedDisplacement = trimCorrectedDisp * (tempCorrectedDensity / 1.025);
 
       double lightship = double.tryParse(_lightshipController.text) ?? 0.0;
       double ballast = double.tryParse(_ballastController.text) ?? 0.0;
       double vlsfo = double.tryParse(_vlsfoController.text) ?? 0.0;
       double lsmgo = double.tryParse(_lsmgoController.text) ?? 0.0;
-      double mgo = double.tryParse(_mgoController.text) ?? 0.0;
+      double fw = double.tryParse(_freshWaterController.text) ?? 0.0;
 
-      totalDeductibles = lightship + ballast + vlsfo + lsmgo + mgo;
+      totalDeductibles = lightship + ballast + vlsfo + lsmgo + fw;
       netCargoDeadweight = correctedDisplacement - totalDeductibles;
 
-      // Save complete fields to History Log for re-editing
       calculationHistory.insert(0, {
         'timestamp': DateTime.now().toString().substring(0, 16),
         'vessel': _vesselNameController.text.isEmpty ? 'N/A' : _vesselNameController.text,
@@ -335,40 +349,11 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
         'ballast': _ballastController.text,
         'vlsfo': _vlsfoController.text,
         'lsmgo': _lsmgoController.text,
-        'mgo': _mgoController.text,
+        'fw': _freshWaterController.text,
         'quarterMean': quarterMean,
         'correctedDisp': correctedDisplacement,
         'netCargo': netCargoDeadweight,
       });
-    });
-  }
-
-  void _resetFields() {
-    setState(() {
-      _vesselNameController.clear();
-      _portController.clear();
-      _chiefOfficerController.clear();
-      _masterController.clear();
-      _fwdPortController.clear();
-      _fwdStbdController.clear();
-      _midPortController.clear();
-      _midStbdController.clear();
-      _aftPortController.clear();
-      _aftStbdController.clear();
-      _rawDispController.clear();
-      _lbpController.clear();
-      _lcfController.clear();
-      _tpcController.clear();
-      _dMtcController.clear();
-      _lightshipController.clear();
-      _ballastController.clear();
-      _vlsfoController.clear();
-      _lsmgoController.clear();
-      _mgoController.clear();
-
-      meanFwd = meanMid = meanAft = 0.0;
-      apparentTrim = quarterMean = ftc = stc = 0.0;
-      correctedDisplacement = totalDeductibles = netCargoDeadweight = 0.0;
     });
   }
 
@@ -403,17 +388,11 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
         double d2 = table[i + 1][0];
 
         if (targetDraft >= d1 && targetDraft <= d2) {
-          double disp = _interpolate(targetDraft, d1, d2, table[i][1], table[i + 1][1]);
-          double lbp = _interpolate(targetDraft, d1, d2, table[i][2], table[i + 1][2]);
-          double lcf = _interpolate(targetDraft, d1, d2, table[i][3], table[i + 1][3]);
-          double tpc = _interpolate(targetDraft, d1, d2, table[i][4], table[i + 1][4]);
-          double dmtc = _interpolate(targetDraft, d1, d2, table[i][5], table[i + 1][5]);
-
-          _rawDispController.text = disp.toStringAsFixed(2);
-          _lbpController.text = lbp.toStringAsFixed(2);
-          _lcfController.text = lcf.toStringAsFixed(3);
-          _tpcController.text = tpc.toStringAsFixed(2);
-          _dMtcController.text = dmtc.toStringAsFixed(2);
+          _rawDispController.text = _interpolate(targetDraft, d1, d2, table[i][1], table[i + 1][1]).toStringAsFixed(2);
+          _lbpController.text = _interpolate(targetDraft, d1, d2, table[i][2], table[i + 1][2]).toStringAsFixed(2);
+          _lcfController.text = _interpolate(targetDraft, d1, d2, table[i][3], table[i + 1][3]).toStringAsFixed(3);
+          _tpcController.text = _interpolate(targetDraft, d1, d2, table[i][4], table[i + 1][4]).toStringAsFixed(2);
+          _dMtcController.text = _interpolate(targetDraft, d1, d2, table[i][5], table[i + 1][5]).toStringAsFixed(2);
           break;
         }
       }
@@ -474,49 +453,19 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           }
         }
 
-        if (tempTable.isEmpty) {
+        if (tempTable.isNotEmpty) {
+          await _saveHydrostaticTableToStorage(tempTable);
+          _calculateSurvey();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: No valid data extracted.')),
+            const SnackBar(content: Text('Hydrostatic table saved to Vessel Profile!')),
           );
-          return;
         }
-
-        await _saveHydrostaticTableToStorage(tempTable);
-        _calculateSurvey();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Hydrostatic table saved permanently!')),
-        );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error loading file: $e')),
         );
       }
     }
-  }
-
-  Future<void> _exportExcelReport() async {
-    var excel = Excel.createExcel();
-    Sheet sheetObject = excel['Draft Survey Report'];
-    excel.delete('Sheet1');
-
-    sheetObject.appendRow([TextCellValue('DRAFT SURVEY REPORT')]);
-    sheetObject.appendRow([]);
-    sheetObject.appendRow([TextCellValue('Vessel Name'), TextCellValue(_vesselNameController.text)]);
-    sheetObject.appendRow([TextCellValue('Port'), TextCellValue(_portController.text)]);
-    sheetObject.appendRow([TextCellValue('Quarter Mean Draft'), TextCellValue(quarterMean.toStringAsFixed(3))]);
-    sheetObject.appendRow([TextCellValue('Corrected Displacement'), TextCellValue(correctedDisplacement.toStringAsFixed(2))]);
-    sheetObject.appendRow([TextCellValue('Net Cargo Deadweight'), TextCellValue(netCargoDeadweight.toStringAsFixed(2))]);
-    sheetObject.appendRow([]);
-    sheetObject.appendRow([TextCellValue('Chief Officer'), TextCellValue(_chiefOfficerController.text)]);
-    sheetObject.appendRow([TextCellValue('Master'), TextCellValue(_masterController.text)]);
-
-    Directory tempDir = await getTemporaryDirectory();
-    String filePath = "${tempDir.path}/Draft_Survey_Export.xlsx";
-    File file = File(filePath);
-    await file.create(recursive: true);
-    await file.writeAsBytes(excel.encode()!);
-
-    await Share.shareXFiles([XFile(filePath)], text: 'Draft Survey Excel Export');
   }
 
   Future<pw.Document> _generatePdfReport() async {
@@ -526,95 +475,96 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
-          return pw.Padding(
-            padding: const pw.EdgeInsets.all(24),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Center(
-                  child: pw.Text('DRAFT SURVEY REPORT', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Divider(),
-                pw.SizedBox(height: 10),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Vessel: ${_vesselNameController.text}'),
-                    pw.Text('Port: ${_portController.text}'),
-                    pw.Text('Date: ${DateTime.now().toString().split(' ')[0]}'),
-                  ],
-                ),
-                pw.SizedBox(height: 15),
-                pw.Text('1. DRAFT OBSERVATIONS', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 5),
-                pw.Bullet(text: 'Quarter Mean Draft: ${quarterMean.toStringAsFixed(3)} m'),
-                pw.Bullet(text: 'Apparent Trim: ${apparentTrim.toStringAsFixed(3)} m'),
-                pw.SizedBox(height: 15),
-                pw.Text('2. DISPLACEMENT & CORRECTIONS', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 5),
-                pw.Bullet(text: 'FTC: ${ftc.toStringAsFixed(2)} MT | STC: ${stc.toStringAsFixed(2)} MT'),
-                pw.Bullet(text: 'Corrected Displacement: ${correctedDisplacement.toStringAsFixed(2)} MT'),
-                pw.SizedBox(height: 15),
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(10),
-                  decoration: pw.BoxDecoration(border: pw.Border.all(width: 1)),
-                  child: pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text('NET CARGO DEADWEIGHT:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
-                      pw.Text('${netCargoDeadweight.toStringAsFixed(2)} MT', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
-                    ],
+          return pw.Stack(
+            children: [
+              pw.Center(
+                child: pw.Opacity(
+                  opacity: 0.1,
+                  child: pw.Text(
+                    surveyStage.toUpperCase(),
+                    style: pw.TextStyle(fontSize: 50, fontWeight: pw.FontWeight.bold),
                   ),
                 ),
-                pw.Spacer(),
-                // Lower Left at Right Signature Blocks
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(24),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    pw.Center(
+                      child: pw.Text('DRAFT SURVEY REPORT', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.SizedBox(height: 5),
+                    pw.Center(
+                      child: pw.Text(surveyStage, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                    ),
+                    pw.SizedBox(height: 10),
+                    pw.Divider(),
+                    pw.SizedBox(height: 10),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Container(width: 180, child: pw.Divider(thickness: 1)),
-                        pw.SizedBox(height: 4),
-                        pw.Text('Chief Officer: ${_chiefOfficerController.text}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                        pw.Text('Vessel: ${_vesselNameController.text}'),
+                        pw.Text('Port: ${_portController.text}'),
+                        pw.Text('Date: ${DateTime.now().toString().split(' ')[0]}'),
                       ],
                     ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    pw.SizedBox(height: 15),
+                    pw.Text('1. DRAFT OBSERVATIONS & HULL CONDITION', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 5),
+                    pw.Bullet(text: 'Quarter Mean Draft: ${quarterMean.toStringAsFixed(3)} m'),
+                    pw.Bullet(text: 'Apparent Trim: ${apparentTrim.toStringAsFixed(3)} m'),
+                    pw.Bullet(text: 'Hull Condition: $hullCondition'),
+                    pw.SizedBox(height: 15),
+                    pw.Text('2. DISPLACEMENT & CORRECTIONS', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 5),
+                    pw.Bullet(text: 'FTC: ${ftc.toStringAsFixed(2)} MT | STC: ${stc.toStringAsFixed(2)} MT'),
+                    pw.Bullet(text: 'Corrected Displacement: ${correctedDisplacement.toStringAsFixed(2)} MT'),
+                    pw.SizedBox(height: 15),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(10),
+                      decoration: pw.BoxDecoration(border: pw.Border.all(width: 1)),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('NET CARGO DEADWEIGHT:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                          pw.Text('${netCargoDeadweight.toStringAsFixed(2)} MT', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    pw.Spacer(),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        pw.Container(width: 180, child: pw.Divider(thickness: 1)),
-                        pw.SizedBox(height: 4),
-                        pw.Text('Master: ${_masterController.text}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Container(width: 180, child: pw.Divider(thickness: 1)),
+                            pw.SizedBox(height: 4),
+                            pw.Text('Chief Officer: ${_chiefOfficerController.text}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                          ],
+                        ),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Container(width: 180, child: pw.Divider(thickness: 1)),
+                            pw.SizedBox(height: 4),
+                            pw.Text('Master: ${_masterController.text}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                          ],
+                        ),
                       ],
                     ),
                   ],
                 ),
-                pw.SizedBox(height: 20),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
     );
 
     return pdf;
-  }
-
-  Future<void> _printReport() async {
-    final pdf = await _generatePdfReport();
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
-  }
-
-  Future<void> _saveAndSharePdf() async {
-    final pdf = await _generatePdfReport();
-    final bytes = await pdf.save();
-    Directory tempDir = await getTemporaryDirectory();
-    String filePath = "${tempDir.path}/Draft_Survey_Report.pdf";
-    File file = File(filePath);
-    await file.writeAsBytes(bytes);
-    await Share.shareXFiles([XFile(filePath)], text: 'Draft Survey Report');
   }
 
   @override
@@ -628,7 +578,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       child: Column(
         children: [
           _buildSectionCard(
-            title: '1. Vessel Particulars & Port',
+            title: '1. Vessel Profile & Survey Stage',
             primaryColor: primaryBlue,
             children: [
               Row(
@@ -640,6 +590,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                       primaryBlue,
                       keyboardType: TextInputType.text,
                       textCapitalization: TextCapitalization.characters,
+                      onChanged: (_) => _loadSavedHydrostaticTable(),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -655,12 +606,21 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 ],
               ),
               const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: surveyStage,
+                decoration: const InputDecoration(labelText: 'Survey Stage / PDF Watermark'),
+                items: ['Initial Survey', 'Intermediate Survey', 'Final Survey'].map((stage) {
+                  return DropdownMenuItem(value: stage, child: Text(stage));
+                }).toList(),
+                onChanged: (val) => setState(() => surveyStage = val!),
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
                     child: _buildInputField(
                       _chiefOfficerController,
-                      'Chief Officer Name',
+                      'Chief Officer',
                       primaryBlue,
                       keyboardType: TextInputType.text,
                       textCapitalization: TextCapitalization.words,
@@ -705,10 +665,22 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   Expanded(child: _buildInputField(_aftStbdController, 'Aft Stbd', primaryBlue)),
                 ],
               ),
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Hull Condition:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(hullCondition, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryBlue)),
+                  ],
+                ),
+              ),
             ],
           ),
           _buildSectionCard(
-            title: '3. Hydrostatics & Density',
+            title: '3. Hydrostatics & Water Density',
             primaryColor: primaryBlue,
             children: [
               Row(
@@ -726,27 +698,19 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   ),
                 ],
               ),
-              if (_hasSavedHydroData) ...[
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('✓ Hydrostatic table active', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
-                    TextButton.icon(
-                      onPressed: _clearSavedHydrostaticTable,
-                      icon: const Icon(Icons.cleaning_services, size: 14, color: Colors.redAccent),
-                      label: const Text('Clear Table', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
-                    )
-                  ],
-                ),
-              ],
               const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _buildInputField(_dockDensityController, 'Dock Density (t/m³)', primaryBlue)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildInputField(_waterTempController, 'Water Temp (°C)', primaryBlue)),
+                ],
+              ),
               _buildInputField(_rawDispController, 'Table Displacement (MT)', primaryBlue),
               _buildInputField(_lbpController, 'LBP (m)', primaryBlue),
               _buildInputField(_lcfController, 'LCF (m)', primaryBlue),
               _buildInputField(_tpcController, 'TPC (Tons/cm)', primaryBlue),
               _buildInputField(_dMtcController, 'dMTC', primaryBlue),
-              _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)', primaryBlue),
             ],
           ),
           _buildSectionCard(
@@ -757,6 +721,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               _buildInputField(_ballastController, 'Ballast Water', primaryBlue),
               _buildInputField(_vlsfoController, 'VLSFO / Fuel Oil', primaryBlue),
               _buildInputField(_lsmgoController, 'LSMGO / Diesel Oil', primaryBlue),
+              _buildInputField(_freshWaterController, 'Fresh Water', primaryBlue),
             ],
           ),
           const SizedBox(height: 10),
@@ -770,62 +735,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: buttonBlue,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _resetFields,
-                  icon: const Icon(Icons.delete_sweep, color: Colors.white),
-                  label: const Text('CLEAR ALL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _printReport,
-                  icon: Icon(Icons.print, color: primaryBlue),
-                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 11)),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: primaryBlue),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _exportExcelReport,
-                  icon: const Icon(Icons.download, color: Colors.green),
-                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.green),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _saveAndSharePdf,
-                  icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.redAccent),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -886,14 +795,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          if (themeNotifier.value == ThemeMode.light)
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,6 +813,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     Color primaryColor, {
     TextInputType keyboardType = const TextInputType.numberWithOptions(decimal: true),
     TextCapitalization textCapitalization = TextCapitalization.none,
+    Function(String)? onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -919,19 +821,13 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
         controller: controller,
         keyboardType: keyboardType,
         textCapitalization: textCapitalization,
+        onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(fontSize: 13),
           filled: true,
-          fillColor: themeNotifier.value == ThemeMode.dark ? const Color(0xFF131B2E) : const Color(0xFFF8FAFC),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Colors.black26),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: primaryColor),
-          ),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.black26)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: primaryColor)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
       ),
@@ -942,7 +838,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: themeNotifier.value == ThemeMode.dark ? const Color(0xFF131B2E) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(8),
         border: Border(left: BorderSide(color: primaryColor, width: 3)),
       ),
@@ -959,9 +854,64 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   }
 }
 
+class TankSoundingTab extends StatefulWidget {
+  const TankSoundingTab({super.key});
+
+  @override
+  State<TankSoundingTab> createState() => _TankSoundingTabState();
+}
+
+class _TankSoundingTabState extends State<TankSoundingTab> {
+  final _wb1Controller = TextEditingController();
+  final _wb2Controller = TextEditingController();
+  final _vlsfo1Controller = TextEditingController();
+  final _lsmgo1Controller = TextEditingController();
+  final _fw1Controller = TextEditingController();
+
+  void _syncWithSurvey() {
+    double totalBallast = (double.tryParse(_wb1Controller.text) ?? 0.0) + (double.tryParse(_wb2Controller.text) ?? 0.0);
+    double totalVlsfo = double.tryParse(_vlsfo1Controller.text) ?? 0.0;
+    double totalLsmgo = double.tryParse(_lsmgo1Controller.text) ?? 0.0;
+    double totalFw = double.tryParse(_fw1Controller.text) ?? 0.0;
+
+    if (updateDeductiblesCallback != null) {
+      updateDeductiblesCallback!(totalBallast, totalVlsfo, totalLsmgo, totalFw);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tank totals sent to Draft Survey Deductibles!')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Tank Sounding / Quantity Input (MT)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          TextField(controller: _wb1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'W.B. Tank No. 1 (MT)')),
+          TextField(controller: _wb2Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'W.B. Tank No. 2 (MT)')),
+          TextField(controller: _vlsfo1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'VLSFO Storage Tank (MT)')),
+          TextField(controller: _lsmgo1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'LSMGO Storage Tank (MT)')),
+          TextField(controller: _fw1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Fresh Water Tank (MT)')),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: _syncWithSurvey,
+            icon: const Icon(Icons.sync),
+            label: const Text('TRANSFER TOTALS TO DRAFT SURVEY'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48), backgroundColor: Colors.teal),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class HistoryLogTab extends StatefulWidget {
   final VoidCallback onLoadHistoryItem;
-  const HistoryLogTab({super.key, required this.onLoadHistoryItem});
+  const HistoryLogTab({super, required this.onLoadHistoryItem});
 
   @override
   State<HistoryLogTab> createState() => _HistoryLogTabState();
@@ -976,11 +926,7 @@ class _HistoryLogTabState extends State<HistoryLogTab> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-            onPressed: () {
-              setState(() {
-                calculationHistory.clear();
-              });
-            },
+            onPressed: () => setState(() => calculationHistory.clear()),
           )
         ],
       ),
@@ -1003,11 +949,7 @@ class _HistoryLogTabState extends State<HistoryLogTab> {
                     subtitle: Text('Date: ${item['timestamp']}\nCargo: ${item['netCargo'].toStringAsFixed(2)} MT\n(Tap to Load & Edit)'),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        setState(() {
-                          calculationHistory.removeAt(index);
-                        });
-                      },
+                      onPressed: () => setState(() => calculationHistory.removeAt(index)),
                     ),
                   ),
                 );
