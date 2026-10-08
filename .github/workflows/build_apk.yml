@@ -126,17 +126,20 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
+      - name: Build APK via Flutter CLI
+        run: flutter build apk --release
+
+      - name: Upload APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Draft-Survey-Pro-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Draft Survey Pro v1.0.${{ github.run_number }}
-          files: android/app/build/outputs/apk/release/app-release.apk
+          files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
