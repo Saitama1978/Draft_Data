@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dartd:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
@@ -911,7 +911,7 @@ class _TankSoundingTabState extends State<TankSoundingTab> {
 
 class HistoryLogTab extends StatefulWidget {
   final VoidCallback onLoadHistoryItem;
-  const HistoryLogTab({super, required this.onLoadHistoryItem});
+  const HistoryLogTab({super.key, required this.onLoadHistoryItem}); // <--- INAYOS DITO (super.key)
 
   @override
   State<HistoryLogTab> createState() => _HistoryLogTabState();
