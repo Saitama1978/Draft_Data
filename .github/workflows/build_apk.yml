@@ -35,12 +35,12 @@ jobs:
       - name: Create Flutter Android Project Structure
         run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
 
-      - name: Fix Android SDK Versions (minSdk 24, compileSdk 36) & V2 Embedding
+      - name: Fix Android SDK Versions & Manifest
         run: |
           # 1. Burahin ang duplicate .kts file
           rm -f android/app/build.gradle.kts
 
-          # 2. Gumawa ng AndroidManifest.xml na may V2 Embedding at App Name
+          # 2. Gumawa ng AndroidManifest.xml
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -78,7 +78,7 @@ jobs:
           }
           EOF
 
-          # 4. Set minSdk 24 at compileSdk 36 sa buong project at subprojects
+          # 4. Set minSdk 24 at compileSdk 36 sa buong project
           cat << 'EOF' >> android/build.gradle
 
           subprojects {
@@ -102,7 +102,7 @@ jobs:
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
 
-          # 6. I-disable ang dependency validation check sa gradle.properties
+          # 6. Set configs sa gradle.properties
           echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
           echo "flutter.minSdkVersion=24" >> android/gradle.properties
 
@@ -126,20 +126,34 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK via Flutter CLI
-        run: flutter build apk --release
+      - name: Build APK direct via Gradle Wrapper
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Extract and Collect Generated APK
+        run: |
+          mkdir -p final_apk
+          FOUND_APK=$(find . -type f -name "*.apk" | head -n 1)
+          if [ -n "$FOUND_APK" ]; then
+            echo "Found APK at: $FOUND_APK"
+            cp "$FOUND_APK" final_apk/app-release.apk
+          else
+            echo "No APK found!" && exit 1
+          fi
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Draft-Survey-Pro-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: final_apk/app-release.apk
 
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Draft Survey Pro v1.0.${{ github.run_number }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: final_apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
