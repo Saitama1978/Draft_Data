@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Global Theme Notifier para sa Light/Dark Mode
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
@@ -178,6 +179,58 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
   double ftc = 0.0, stc = 0.0, correctedDisplacement = 0.0;
   double totalDeductibles = 0.0, netCargoDeadweight = 0.0;
 
+  // Local Hydrostatic Storage Array
+  List<List<double>> _loadedHydroTable = [];
+  bool _hasSavedHydroData = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedHydrostaticTable(); // Awtomatikong kukunin ang na-save na table sa pagbukas ng app
+  }
+
+  // I-load ang saved hydrostatic table mula sa SharedPreferences
+  Future<void> _loadSavedHydrostaticTable() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? jsonString = prefs.getString('saved_hydro_table');
+    if (jsonString != null && jsonString.isNotEmpty) {
+      List<dynamic> decoded = jsonDecode(jsonString);
+      setState(() {
+        _loadedHydroTable = decoded.map((row) => List<double>.from(row.map((item) => (item as num).toDouble()))).toList();
+        _hasSavedHydroData = _loadedHydroTable.isNotEmpty;
+      });
+    }
+  }
+
+  // I-save ang hydrostatic table sa SharedPreferences
+  Future<void> _saveHydrostaticTableToStorage(List<List<double>> table) async {
+    final prefs = await SharedPreferences.getInstance();
+    String jsonString = jsonEncode(table);
+    await prefs.setString('saved_hydro_table', jsonString);
+    setState(() {
+      _loadedHydroTable = table;
+      _hasSavedHydroData = true;
+    });
+  }
+
+  // Burahin ang hydrostatic table sa storage (Para sa pagpalit ng ibang barko)
+  Future<void> _clearSavedHydrostaticTable() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_hydro_table');
+    setState(() {
+      _loadedHydroTable.clear();
+      _hasSavedHydroData = false;
+      _rawDispController.clear();
+      _lbpController.clear();
+      _lcfController.clear();
+      _tpcController.clear();
+      _dMtcController.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Hydrostatic table cleared! Successively ready for new vessel data.')),
+    );
+  }
+
   void _calculateSurvey() {
     setState(() {
       double fp = double.tryParse(_fwdPortController.text) ?? 0.0;
@@ -193,6 +246,11 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
       apparentTrim = meanAft - meanFwd;
       quarterMean = (meanFwd + (6 * meanMid) + meanAft) / 8;
+
+      // Kung may nakasave na hydrostatic table, awtomatikong i-interpolate agad!
+      if (_loadedHydroTable.isNotEmpty) {
+        _applyInterpolationFromLoadedTable(quarterMean);
+      }
 
       double rawDisp = double.tryParse(_rawDispController.text) ?? 0.0;
       double lcf = double.tryParse(_lcfController.text) ?? 0.0;
@@ -291,7 +349,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 Text('8.00, 12500.5, 180.0, 2.15, 25.4, 180.2\n8.10, 12680.0, 180.0, 2.12, 25.6, 181.0', style: TextStyle(fontSize: 11, fontFamily: 'monospace')),
                 SizedBox(height: 10),
                 Text(
-                  '* Note: Automatic linear interpolation will be applied based on the calculated Quarter Mean Draft.',
+                  '* Note: Data is permanently saved on device until you choose to reset/change vessel data.',
                   style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amber),
                 ),
               ],
@@ -308,16 +366,55 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
   }
 
-  // Formula para sa Linear Interpolation: y = y1 + ((x - x1) / (x2 - x1)) * (y2 - y1)
   double _interpolate(double x, double x1, double x2, double y1, double y2) {
     if (x2 == x1) return y1;
     return y1 + ((x - x1) / (x2 - x1)) * (y2 - y1);
   }
 
-  Future<void> _importExcelHydrostatic() async {
-    // Kumpyutin muna ang Quarter Mean Draft bago mag-interpolate
-    _calculateSurvey();
+  void _applyInterpolationFromLoadedTable(double targetDraft) {
+    if (_loadedHydroTable.isEmpty || targetDraft <= 0) return;
 
+    List<List<double>> table = List.from(_loadedHydroTable);
+    table.sort((a, b) => a[0].compareTo(b[0]));
+
+    if (targetDraft <= table.first[0]) {
+      var r = table.first;
+      _rawDispController.text = r[1].toStringAsFixed(2);
+      _lbpController.text = r[2].toStringAsFixed(2);
+      _lcfController.text = r[3].toStringAsFixed(2);
+      _tpcController.text = r[4].toStringAsFixed(2);
+      _dMtcController.text = r[5].toStringAsFixed(2);
+    } else if (targetDraft >= table.last[0]) {
+      var r = table.last;
+      _rawDispController.text = r[1].toStringAsFixed(2);
+      _lbpController.text = r[2].toStringAsFixed(2);
+      _lcfController.text = r[3].toStringAsFixed(2);
+      _tpcController.text = r[4].toStringAsFixed(2);
+      _dMtcController.text = r[5].toStringAsFixed(2);
+    } else {
+      for (int i = 0; i < table.length - 1; i++) {
+        double d1 = table[i][0];
+        double d2 = table[i + 1][0];
+
+        if (targetDraft >= d1 && targetDraft <= d2) {
+          double disp = _interpolate(targetDraft, d1, d2, table[i][1], table[i + 1][1]);
+          double lbp = _interpolate(targetDraft, d1, d2, table[i][2], table[i + 1][2]);
+          double lcf = _interpolate(targetDraft, d1, d2, table[i][3], table[i + 1][3]);
+          double tpc = _interpolate(targetDraft, d1, d2, table[i][4], table[i + 1][4]);
+          double dmtc = _interpolate(targetDraft, d1, d2, table[i][5], table[i + 1][5]);
+
+          _rawDispController.text = disp.toStringAsFixed(2);
+          _lbpController.text = lbp.toStringAsFixed(2);
+          _lcfController.text = lcf.toStringAsFixed(3);
+          _tpcController.text = tpc.toStringAsFixed(2);
+          _dMtcController.text = dmtc.toStringAsFixed(2);
+          break;
+        }
+      }
+    }
+  }
+
+  Future<void> _importExcelHydrostatic() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls', 'csv'],
@@ -325,7 +422,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
     if (result != null && result.files.single.path != null) {
       String filePath = result.files.single.path!;
-      List<List<double>> table = [];
+      List<List<double>> tempTable = [];
 
       try {
         if (filePath.endsWith('.csv')) {
@@ -341,7 +438,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               double? tpc = double.tryParse(cols[4].trim());
               double? dmtc = double.tryParse(cols[5].trim());
               if (d != null && disp != null && lbp != null && lcf != null && tpc != null && dmtc != null) {
-                table.add([d, disp, lbp, lcf, tpc, dmtc]);
+                tempTable.add([d, disp, lbp, lcf, tpc, dmtc]);
               }
             }
           }
@@ -362,7 +459,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   double? tpc = double.tryParse(row[4]?.value?.toString() ?? '');
                   double? dmtc = double.tryParse(row[5]?.value?.toString() ?? '');
                   if (d != null && disp != null && lbp != null && lcf != null && tpc != null && dmtc != null) {
-                    table.add([d, disp, lbp, lcf, tpc, dmtc]);
+                    tempTable.add([d, disp, lbp, lcf, tpc, dmtc]);
                   }
                 }
               }
@@ -371,64 +468,20 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           }
         }
 
-        if (table.isEmpty) {
+        if (tempTable.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: Walang valid data na nakuha sa file.')),
+            const SnackBar(content: Text('Error: No valid data extracted from file.')),
           );
           return;
         }
 
-        // I-sort ang table batay sa Draft (Column 0)
-        table.sort((a, b) => a[0].compareTo(b[0]));
+        // Permanenteng I-save ang Table sa Phone Storage
+        await _saveHydrostaticTableToStorage(tempTable);
 
-        double targetDraft = quarterMean > 0 ? quarterMean : 0.0;
-        
-        // Paghahanap at Linear Interpolation
-        if (targetDraft <= table.first[0]) {
-          // Kapag mas mababa sa pinakamababang draft sa table
-          var r = table.first;
-          _rawDispController.text = r[1].toStringAsFixed(2);
-          _lbpController.text = r[2].toStringAsFixed(2);
-          _lcfController.text = r[3].toStringAsFixed(2);
-          _tpcController.text = r[4].toStringAsFixed(2);
-          _dMtcController.text = r[5].toStringAsFixed(2);
-        } else if (targetDraft >= table.last[0]) {
-          // Kapag mas mataas sa pinakamataas na draft sa table
-          var r = table.last;
-          _rawDispController.text = r[1].toStringAsFixed(2);
-          _lbpController.text = r[2].toStringAsFixed(2);
-          _lcfController.text = r[3].toStringAsFixed(2);
-          _tpcController.text = r[4].toStringAsFixed(2);
-          _dMtcController.text = r[5].toStringAsFixed(2);
-        } else {
-          // Hanapin ang dalawang katabing row para sa interpolation
-          for (int i = 0; i < table.length - 1; i++) {
-            double d1 = table[i][0];
-            double d2 = table[i + 1][0];
-
-            if (targetDraft >= d1 && targetDraft <= d2) {
-              double disp = _interpolate(targetDraft, d1, d2, table[i][1], table[i + 1][1]);
-              double lbp = _interpolate(targetDraft, d1, d2, table[i][2], table[i + 1][2]);
-              double lcf = _interpolate(targetDraft, d1, d2, table[i][3], table[i + 1][3]);
-              double tpc = _interpolate(targetDraft, d1, d2, table[i][4], table[i + 1][4]);
-              double dmtc = _interpolate(targetDraft, d1, d2, table[i][5], table[i + 1][5]);
-
-              setState(() {
-                _rawDispController.text = disp.toStringAsFixed(2);
-                _lbpController.text = lbp.toStringAsFixed(2);
-                _lcfController.text = lcf.toStringAsFixed(3);
-                _tpcController.text = tpc.toStringAsFixed(2);
-                _dMtcController.text = dmtc.toStringAsFixed(2);
-              });
-
-              _calculateSurvey(); // I-recalculate gamit ang mga bagong interpolated values
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Auto-interpolated data for Draft: ${targetDraft.toStringAsFixed(3)} m!')),
-              );
-              break;
-            }
-          }
-        }
+        _calculateSurvey(); // Automatic interpolation at recalculation
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Hydrostatic table saved permanently! Auto-interpolation active.')),
+        );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error processing file: $e')),
@@ -613,9 +666,9 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                     child: ElevatedButton.icon(
                       onPressed: _importExcelHydrostatic,
                       icon: const Icon(Icons.file_upload, color: Colors.white),
-                      label: const Text('IMPORT HYDROSTATIC EXCEL'),
+                      label: Text(_hasSavedHydroData ? 'CHANGE HYDROSTATIC EXCEL' : 'IMPORT HYDROSTATIC EXCEL'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
+                        backgroundColor: _hasSavedHydroData ? Colors.orange.shade800 : Colors.teal,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
@@ -628,6 +681,20 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   ),
                 ],
               ),
+              if (_hasSavedHydroData) ...[
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('✓ Hydrostatic table active in memory', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                    TextButton.icon(
+                      onPressed: _clearSavedHydrostaticTable,
+                      icon: const Icon(Icons.cleaning_services, size: 14, color: Colors.redAccent),
+                      label: const Text('Clear Table', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                    )
+                  ],
+                ),
+              ],
               const SizedBox(height: 10),
               _buildInputField(_rawDispController, 'Table Displacement (MT)', primaryBlue),
               _buildInputField(_lbpController, 'LBP (m)', primaryBlue),
