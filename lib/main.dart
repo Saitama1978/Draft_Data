@@ -273,25 +273,26 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               mainAxisSize: MainAxisSize.min,
               children: const [
                 Text(
-                  'Format your Excel (.xlsx) or CSV file with 5 columns in Row 2 (Row 1 is Header):',
+                  'Format your Excel (.xlsx) or CSV file with 6 columns starting from Row 2 (Row 1 is Header):',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 10),
-                Text('Col A (1): Table Displacement (MT)'),
-                Text('Col B (2): LBP (m)'),
-                Text('Col C (3): LCF (m)'),
-                Text('Col D (4): TPC (Tons/cm)'),
-                Text('Col E (5): dMTC'),
+                Text('Col A (1): Draft (m)'),
+                Text('Col B (2): Table Displacement (MT)'),
+                Text('Col C (3): LBP (m)'),
+                Text('Col D (4): LCF (m)'),
+                Text('Col E (5): TPC (Tons/cm)'),
+                Text('Col F (6): dMTC'),
                 SizedBox(height: 15),
                 Text(
-                  'Sample Data (Row 2):',
+                  'Sample Data (Row 2 & Row 3):',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
                 ),
-                Text('12500.5, 180.0, 2.15, 25.4, 180.2', style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                Text('8.00, 12500.5, 180.0, 2.15, 25.4, 180.2\n8.10, 12680.0, 180.0, 2.12, 25.6, 181.0', style: TextStyle(fontSize: 11, fontFamily: 'monospace')),
                 SizedBox(height: 10),
                 Text(
-                  '* Note: Ensure file extension is .xlsx, .xls, or .csv',
-                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                  '* Note: Automatic linear interpolation will be applied based on the calculated Quarter Mean Draft.',
+                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amber),
                 ),
               ],
             ),
@@ -307,7 +308,16 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
   }
 
+  // Formula para sa Linear Interpolation: y = y1 + ((x - x1) / (x2 - x1)) * (y2 - y1)
+  double _interpolate(double x, double x1, double x2, double y1, double y2) {
+    if (x2 == x1) return y1;
+    return y1 + ((x - x1) / (x2 - x1)) * (y2 - y1);
+  }
+
   Future<void> _importExcelHydrostatic() async {
+    // Kumpyutin muna ang Quarter Mean Draft bago mag-interpolate
+    _calculateSurvey();
+
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls', 'csv'],
@@ -315,44 +325,114 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
     if (result != null && result.files.single.path != null) {
       String filePath = result.files.single.path!;
+      List<List<double>> table = [];
 
-      if (filePath.endsWith('.csv')) {
-        final input = File(filePath).readAsStringSync();
-        List<String> lines = const LineSplitter().convert(input);
-        if (lines.length > 1) {
-          List<String> row = lines[1].split(',');
-          setState(() {
-            if (row.isNotEmpty) _rawDispController.text = row[0].trim();
-            if (row.length > 1) _lbpController.text = row[1].trim();
-            if (row.length > 2) _lcfController.text = row[2].trim();
-            if (row.length > 3) _tpcController.text = row[3].trim();
-            if (row.length > 4) _dMtcController.text = row[4].trim();
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Hydrostatic CSV data loaded successfully!')),
-          );
-        }
-      } else {
-        var bytes = File(filePath).readAsBytesSync();
-        var excel = Excel.decodeBytes(bytes);
+      try {
+        if (filePath.endsWith('.csv')) {
+          final input = File(filePath).readAsStringSync();
+          List<String> lines = const LineSplitter().convert(input);
+          for (int i = 1; i < lines.length; i++) {
+            List<String> cols = lines[i].split(',');
+            if (cols.length >= 6) {
+              double? d = double.tryParse(cols[0].trim());
+              double? disp = double.tryParse(cols[1].trim());
+              double? lbp = double.tryParse(cols[2].trim());
+              double? lcf = double.tryParse(cols[3].trim());
+              double? tpc = double.tryParse(cols[4].trim());
+              double? dmtc = double.tryParse(cols[5].trim());
+              if (d != null && disp != null && lbp != null && lcf != null && tpc != null && dmtc != null) {
+                table.add([d, disp, lbp, lcf, tpc, dmtc]);
+              }
+            }
+          }
+        } else {
+          var bytes = File(filePath).readAsBytesSync();
+          var excel = Excel.decodeBytes(bytes);
 
-        for (var table in excel.tables.keys) {
-          var sheet = excel.tables[table];
-          if (sheet != null && sheet.maxRows > 1) {
-            var row = sheet.rows[1];
-            setState(() {
-              if (row.isNotEmpty && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
-              if (row.length > 1 && row[1]?.value != null) _lbpController.text = row[1]!.value.toString();
-              if (row.length > 2 && row[2]?.value != null) _lcfController.text = row[2]!.value.toString();
-              if (row.length > 3 && row[3]?.value != null) _tpcController.text = row[3]!.value.toString();
-              if (row.length > 4 && row[4]?.value != null) _dMtcController.text = row[4]!.value.toString();
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Hydrostatic Excel data loaded successfully!')),
-            );
-            break;
+          for (var tableName in excel.tables.keys) {
+            var sheet = excel.tables[tableName];
+            if (sheet != null && sheet.maxRows > 1) {
+              for (int i = 1; i < sheet.maxRows; i++) {
+                var row = sheet.rows[i];
+                if (row.length >= 6) {
+                  double? d = double.tryParse(row[0]?.value?.toString() ?? '');
+                  double? disp = double.tryParse(row[1]?.value?.toString() ?? '');
+                  double? lbp = double.tryParse(row[2]?.value?.toString() ?? '');
+                  double? lcf = double.tryParse(row[3]?.value?.toString() ?? '');
+                  double? tpc = double.tryParse(row[4]?.value?.toString() ?? '');
+                  double? dmtc = double.tryParse(row[5]?.value?.toString() ?? '');
+                  if (d != null && disp != null && lbp != null && lcf != null && tpc != null && dmtc != null) {
+                    table.add([d, disp, lbp, lcf, tpc, dmtc]);
+                  }
+                }
+              }
+              break;
+            }
           }
         }
+
+        if (table.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: Walang valid data na nakuha sa file.')),
+          );
+          return;
+        }
+
+        // I-sort ang table batay sa Draft (Column 0)
+        table.sort((a, b) => a[0].compareTo(b[0]));
+
+        double targetDraft = quarterMean > 0 ? quarterMean : 0.0;
+        
+        // Paghahanap at Linear Interpolation
+        if (targetDraft <= table.first[0]) {
+          // Kapag mas mababa sa pinakamababang draft sa table
+          var r = table.first;
+          _rawDispController.text = r[1].toStringAsFixed(2);
+          _lbpController.text = r[2].toStringAsFixed(2);
+          _lcfController.text = r[3].toStringAsFixed(2);
+          _tpcController.text = r[4].toStringAsFixed(2);
+          _dMtcController.text = r[5].toStringAsFixed(2);
+        } else if (targetDraft >= table.last[0]) {
+          // Kapag mas mataas sa pinakamataas na draft sa table
+          var r = table.last;
+          _rawDispController.text = r[1].toStringAsFixed(2);
+          _lbpController.text = r[2].toStringAsFixed(2);
+          _lcfController.text = r[3].toStringAsFixed(2);
+          _tpcController.text = r[4].toStringAsFixed(2);
+          _dMtcController.text = r[5].toStringAsFixed(2);
+        } else {
+          // Hanapin ang dalawang katabing row para sa interpolation
+          for (int i = 0; i < table.length - 1; i++) {
+            double d1 = table[i][0];
+            double d2 = table[i + 1][0];
+
+            if (targetDraft >= d1 && targetDraft <= d2) {
+              double disp = _interpolate(targetDraft, d1, d2, table[i][1], table[i + 1][1]);
+              double lbp = _interpolate(targetDraft, d1, d2, table[i][2], table[i + 1][2]);
+              double lcf = _interpolate(targetDraft, d1, d2, table[i][3], table[i + 1][3]);
+              double tpc = _interpolate(targetDraft, d1, d2, table[i][4], table[i + 1][4]);
+              double dmtc = _interpolate(targetDraft, d1, d2, table[i][5], table[i + 1][5]);
+
+              setState(() {
+                _rawDispController.text = disp.toStringAsFixed(2);
+                _lbpController.text = lbp.toStringAsFixed(2);
+                _lcfController.text = lcf.toStringAsFixed(3);
+                _tpcController.text = tpc.toStringAsFixed(2);
+                _dMtcController.text = dmtc.toStringAsFixed(2);
+              });
+
+              _calculateSurvey(); // I-recalculate gamit ang mga bagong interpolated values
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Auto-interpolated data for Draft: ${targetDraft.toStringAsFixed(3)} m!')),
+              );
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error processing file: $e')),
+        );
       }
     }
   }
@@ -473,9 +553,25 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
             children: [
               Row(
                 children: [
-                  Expanded(child: _buildInputField(_vesselNameController, 'Vessel Name', primaryBlue)),
+                  Expanded(
+                    child: _buildInputField(
+                      _vesselNameController,
+                      'Vessel Name',
+                      primaryBlue,
+                      keyboardType: TextInputType.text,
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildInputField(_portController, 'Port', primaryBlue)),
+                  Expanded(
+                    child: _buildInputField(
+                      _portController,
+                      'Port',
+                      primaryBlue,
+                      keyboardType: TextInputType.text,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -698,12 +794,19 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
   }
 
-  Widget _buildInputField(TextEditingController controller, String label, Color primaryColor) {
+  Widget _buildInputField(
+    TextEditingController controller,
+    String label,
+    Color primaryColor, {
+    TextInputType keyboardType = const TextInputType.numberWithOptions(decimal: true),
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: TextField(
         controller: controller,
-        keyboardType: TextInputType.number,
+        keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(fontSize: 13),
