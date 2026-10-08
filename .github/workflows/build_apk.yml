@@ -35,7 +35,7 @@ jobs:
       - name: Create Flutter Android Project Structure
         run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
 
-      - name: Fix Android SDK 36 Global Override, V2 Embedding & App Name
+      - name: Fix Android SDK Versions (minSdk 24, compileSdk 36) & V2 Embedding
         run: |
           # 1. Burahin ang duplicate .kts file
           rm -f android/app/build.gradle.kts
@@ -78,7 +78,7 @@ jobs:
           }
           EOF
 
-          # 4. Puwersahin ang LAHAT ng plugins/dependencies na gumamit ng compileSdk 36
+          # 4. Set minSdk 24 at compileSdk 36 sa buong project at subprojects
           cat << 'EOF' >> android/build.gradle
 
           subprojects {
@@ -86,16 +86,25 @@ jobs:
                   if (project.hasProperty('android')) {
                       project.android {
                           compileSdkVersion 36
+                          defaultConfig {
+                              minSdkVersion 24
+                          }
                       }
                   }
               }
           }
           EOF
 
-          # 5. Baguhin din ang app-level build.gradle sa compileSdk 36
+          # 5. Baguhin ang values sa app-level build.gradle
+          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
+          sed -i 's/minSdk .*/minSdk = 24/' android/app/build.gradle || true
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
+
+          # 6. I-disable ang dependency validation check sa gradle.properties
+          echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
+          echo "flutter.minSdkVersion=24" >> android/gradle.properties
 
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
