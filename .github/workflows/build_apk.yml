@@ -40,7 +40,7 @@ jobs:
           # 1. Burahin ang duplicate .kts file
           rm -f android/app/build.gradle.kts
 
-          # 2. Gumawa ng styles.xml para hindi mag-crash sa Theme launch
+          # 2. Gumawa ng styles.xml para maiwasan ang launch crash
           mkdir -p android/app/src/main/res/values
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -54,7 +54,7 @@ jobs:
           </resources>
           EOF
 
-          # 3. Gumawa ng kumpletong AndroidManifest.xml
+          # 3. Gumawa ng AndroidManifest.xml
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -95,7 +95,7 @@ jobs:
           }
           EOF
 
-          # 5. Set SDK levels sa build.gradle
+          # 5. Set minSdk 24 at compileSdk 36 sa buong project
           cat << 'EOF' >> android/build.gradle
 
           subprojects {
@@ -112,7 +112,7 @@ jobs:
           }
           EOF
 
-          # 6. Set Debug Signing config sa Release build
+          # 6. Force Debug Signing sa Release build
           cat << 'EOF' >> android/app/build.gradle
 
           android {
@@ -124,14 +124,14 @@ jobs:
           }
           EOF
 
-          # 7. Apply SDK updates sa app build.gradle
+          # 7. Apply SDK updates
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
           sed -i 's/minSdk .*/minSdk = 24/' android/app/build.gradle || true
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
 
-          # 8. Gradle property overrides
+          # 8. Set properties
           echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
           echo "flutter.minSdkVersion=24" >> android/gradle.properties
 
@@ -155,13 +155,22 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Release APK via Flutter CLI
-        run: flutter build apk --release
+      - name: Build APK via Gradle Wrapper
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Extract and Collect APK
         run: |
           mkdir -p final_apk
-          cp build/app/outputs/flutter-apk/app-release.apk final_apk/app-release.apk
+          FOUND_APK=$(find . -type f -name "*.apk" | head -n 1)
+          if [ -n "$FOUND_APK" ]; then
+            echo "Found APK at: $FOUND_APK"
+            cp "$FOUND_APK" final_apk/app-release.apk
+          else
+            echo "No APK found!" && exit 1
+          fi
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
