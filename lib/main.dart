@@ -97,7 +97,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Text('Draft Survey Pro', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text('Professional Ship Stability Suite', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
+            Text('Developer: 2/O Renante Fullo', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
           ],
         ),
         actions: [
@@ -357,6 +357,35 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     });
   }
 
+  void _resetFields() {
+    setState(() {
+      _vesselNameController.clear();
+      _portController.clear();
+      _chiefOfficerController.clear();
+      _masterController.clear();
+      _fwdPortController.clear();
+      _fwdStbdController.clear();
+      _midPortController.clear();
+      _midStbdController.clear();
+      _aftPortController.clear();
+      _aftStbdController.clear();
+      _rawDispController.clear();
+      _lbpController.clear();
+      _lcfController.clear();
+      _tpcController.clear();
+      _dMtcController.clear();
+      _lightshipController.clear();
+      _ballastController.clear();
+      _vlsfoController.clear();
+      _lsmgoController.clear();
+      _freshWaterController.clear();
+
+      meanFwd = meanMid = meanAft = 0.0;
+      apparentTrim = quarterMean = ftc = stc = 0.0;
+      correctedDisplacement = totalDeductibles = netCargoDeadweight = 0.0;
+    });
+  }
+
   double _interpolate(double x, double x1, double x2, double y1, double y2) {
     if (x2 == x1) return y1;
     return y1 + ((x - x1) / (x2 - x1)) * (y2 - y1);
@@ -468,6 +497,31 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     }
   }
 
+  Future<void> _exportExcelReport() async {
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Draft Survey Report'];
+    excel.delete('Sheet1');
+
+    sheetObject.appendRow([TextCellValue('DRAFT SURVEY REPORT')]);
+    sheetObject.appendRow([]);
+    sheetObject.appendRow([TextCellValue('Vessel Name'), TextCellValue(_vesselNameController.text)]);
+    sheetObject.appendRow([TextCellValue('Port'), TextCellValue(_portController.text)]);
+    sheetObject.appendRow([TextCellValue('Quarter Mean Draft'), TextCellValue(quarterMean.toStringAsFixed(3))]);
+    sheetObject.appendRow([TextCellValue('Corrected Displacement'), TextCellValue(correctedDisplacement.toStringAsFixed(2))]);
+    sheetObject.appendRow([TextCellValue('Net Cargo Deadweight'), TextCellValue(netCargoDeadweight.toStringAsFixed(2))]);
+    sheetObject.appendRow([]);
+    sheetObject.appendRow([TextCellValue('Chief Officer'), TextCellValue(_chiefOfficerController.text)]);
+    sheetObject.appendRow([TextCellValue('Master'), TextCellValue(_masterController.text)]);
+
+    Directory tempDir = await getTemporaryDirectory();
+    String filePath = "${tempDir.path}/Draft_Survey_Export.xlsx";
+    File file = File(filePath);
+    await file.create(recursive: true);
+    await file.writeAsBytes(excel.encode()!);
+
+    await Share.shareXFiles([XFile(filePath)], text: 'Draft Survey Excel Export');
+  }
+
   Future<pw.Document> _generatePdfReport() async {
     final pdf = pw.Document();
 
@@ -565,6 +619,21 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
 
     return pdf;
+  }
+
+  Future<void> _printReport() async {
+    final pdf = await _generatePdfReport();
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+  }
+
+  Future<void> _saveAndSharePdf() async {
+    final pdf = await _generatePdfReport();
+    final bytes = await pdf.save();
+    Directory tempDir = await getTemporaryDirectory();
+    String filePath = "${tempDir.path}/Draft_Survey_Report.pdf";
+    File file = File(filePath);
+    await file.writeAsBytes(bytes);
+    await Share.shareXFiles([XFile(filePath)], text: 'Draft Survey Report');
   }
 
   @override
@@ -735,6 +804,63 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: buttonBlue,
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _resetFields,
+                  icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                  label: const Text('CLEAR ALL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // PRINT, EXPORT EXCEL, AT SAVE PDF BUTTONS (BINANSA PABALIK DITO)
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _printReport,
+                  icon: Icon(Icons.print, color: primaryBlue),
+                  label: Text('PRINT REPORT', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: primaryBlue),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _exportExcelReport,
+                  icon: const Icon(Icons.download, color: Colors.green),
+                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.green),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saveAndSharePdf,
+                  icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                  label: const Text('SAVE PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -989,7 +1115,6 @@ class _TankSoundingTabState extends State<TankSoundingTab> {
           const Text('Tank Sounding / Deductibles Input (MT)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           
-          // OPTION 1: IMPORT EXCEL
           Row(
             children: [
               Expanded(
@@ -1015,7 +1140,6 @@ class _TankSoundingTabState extends State<TankSoundingTab> {
           const Divider(),
           const SizedBox(height: 8),
 
-          // OPTION 2: DIRECT MANUAL INPUT
           const Text('Or Enter Totals Manually:', style: TextStyle(fontSize: 13, color: Colors.grey)),
           const SizedBox(height: 10),
           TextField(controller: _ballastController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total Ballast Water (MT)')),
