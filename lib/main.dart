@@ -74,11 +74,13 @@ class MainHomeScreen extends StatefulWidget {
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
   int _selectedIndex = 0;
+  final PageController _pageController = PageController();
 
-  void _switchToTab(int index) {
+  void _onTabTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+    _pageController.jumpToPage(index);
   }
 
   @override
@@ -88,7 +90,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     final List<Widget> tabs = [
       const DraftSurveyTab(),
       const TankSoundingTab(),
-      HistoryLogTab(onLoadHistoryItem: () => _switchToTab(0)),
+      HistoryLogTab(onLoadHistoryItem: () => _onTabTapped(0)),
     ];
 
     return Scaffold(
@@ -120,14 +122,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ],
       ),
-      body: tabs[_selectedIndex],
+      body: PageView(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: tabs,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        onTap: _onTabTapped,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.calculate),
@@ -158,7 +160,10 @@ class DraftSurveyTab extends StatefulWidget {
   State<DraftSurveyTab> createState() => _DraftSurveyTabState();
 }
 
-class _DraftSurveyTabState extends State<DraftSurveyTab> {
+class _DraftSurveyTabState extends State<DraftSurveyTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _vesselNameController = TextEditingController();
   final _portController = TextEditingController();
   final _chiefOfficerController = TextEditingController();
@@ -205,10 +210,10 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
   void _updateDeductiblesFromTanks(double ballast, double vlsfo, double lsmgo, double fw) {
     setState(() {
-      _ballastController.text = ballast.toStringAsFixed(2);
-      _vlsfoController.text = vlsfo.toStringAsFixed(2);
-      _lsmgoController.text = lsmgo.toStringAsFixed(2);
-      _freshWaterController.text = fw.toStringAsFixed(2);
+      if (ballast > 0) _ballastController.text = ballast.toStringAsFixed(2);
+      if (vlsfo > 0) _vlsfoController.text = vlsfo.toStringAsFixed(2);
+      if (lsmgo > 0) _lsmgoController.text = lsmgo.toStringAsFixed(2);
+      if (fw > 0) _freshWaterController.text = fw.toStringAsFixed(2);
       _calculateSurvey();
     });
   }
@@ -242,12 +247,16 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
       _calculateSurvey();
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('History calculation loaded into Draft Survey form!')),
+    );
   }
 
   Future<void> _loadSavedHydrostaticTable() async {
     final prefs = await SharedPreferences.getInstance();
     String key = 'saved_hydro_${_vesselNameController.text.trim()}';
-    if (key.isEmpty) key = 'saved_hydro_default';
+    if (key == 'saved_hydro_') key = 'saved_hydro_default';
 
     String? jsonString = prefs.getString(key);
     if (jsonString != null && jsonString.isNotEmpty) {
@@ -638,6 +647,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isDark = themeNotifier.value == ThemeMode.dark;
     final primaryBlue = isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
     final buttonBlue = isDark ? const Color(0xFF2563EB) : const Color(0xFF1D4ED8);
@@ -824,7 +834,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
             ],
           ),
           const SizedBox(height: 10),
-          // PRINT, EXPORT EXCEL, AT SAVE PDF BUTTONS (BINANSA PABALIK DITO)
           Row(
             children: [
               Expanded(
@@ -987,7 +996,10 @@ class TankSoundingTab extends StatefulWidget {
   State<TankSoundingTab> createState() => _TankSoundingTabState();
 }
 
-class _TankSoundingTabState extends State<TankSoundingTab> {
+class _TankSoundingTabState extends State<TankSoundingTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _ballastController = TextEditingController();
   final _vlsfoController = TextEditingController();
   final _lsmgoController = TextEditingController();
@@ -1107,6 +1119,7 @@ class _TankSoundingTabState extends State<TankSoundingTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1196,8 +1209,8 @@ class _HistoryLogTabState extends State<HistoryLogTab> {
                   child: ListTile(
                     onTap: () {
                       if (loadHistoryToSurveyCallback != null) {
-                        loadHistoryToSurveyCallback!(item);
-                        widget.onLoadHistoryItem();
+                        loadHistoryToSurveyCallback!(item); // 1. Ikakarga ang data sa controllers
+                        widget.onLoadHistoryItem(); // 2. Awtomatikong lilipat pabalik sa Draft Survey Tab
                       }
                     },
                     title: Text('${item['vessel']} - ${item['port']}', style: const TextStyle(fontWeight: FontWeight.bold)),
