@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,31 +9,66 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 
+// Global Theme Notifier para sa Light/Dark Mode
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const DraftSurveyProApp());
 }
 
 class DraftSurveyProApp extends StatelessWidget {
-  const DraftSurveyProApp({Key? key}) : super(key: key);
+  const DraftSurveyProApp({Key? key}) : super(Key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Draft Survey Pro',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF131B2E),
-        primaryColor: const Color(0xFF38BDF8),
-        cardColor: const Color(0xFF1D273D),
-      ),
-      home: const MainHomeScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, ThemeMode currentMode, __) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Draft Survey Pro',
+          themeMode: currentMode,
+          // LIGHT THEME CONFIGURATION
+          theme: ThemeData.light().copyWith(
+            scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+            primaryColor: const Color(0xFF0284C7),
+            cardColor: Colors.white,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              elevation: 1,
+            ),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: Colors.white,
+              selectedItemColor: Color(0xFF0284C7),
+              unselectedItemColor: Colors.black54,
+            ),
+          ),
+          // DARK THEME CONFIGURATION
+          darkTheme: ThemeData.dark().copyWith(
+            scaffoldBackgroundColor: const Color(0xFF131B2E),
+            primaryColor: const Color(0xFF38BDF8),
+            cardColor: const Color(0xFF1D273D),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF1D273D),
+              foregroundColor: Colors.white,
+            ),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: Color(0xFF1D273D),
+              selectedItemColor: Color(0xFF38BDF8),
+              unselectedItemColor: Colors.white54,
+            ),
+          ),
+          home: const MainHomeScreen(),
+        );
+      },
     );
   }
 }
 
 class MainHomeScreen extends StatefulWidget {
-  const MainHomeScreen({Key? key}) : super(key: key);
+  const MainHomeScreen({Key? key}) : super(Key: key);
 
   @override
   State<MainHomeScreen> createState() => _MainHomeScreenState();
@@ -48,9 +84,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    bool isDark = themeNotifier.value == ThemeMode.dark;
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1D273D),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
@@ -58,12 +95,29 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             Text('Developer: 2/O Renante Fullo', style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
           ],
         ),
+        actions: [
+          // LIGHT / DARK MODE TOGGLE SWITCH
+          Row(
+            children: [
+              Icon(
+                isDark ? Icons.dark_mode : Icons.light_mode,
+                color: isDark ? Colors.amber : Colors.orangeAccent,
+              ),
+              Switch(
+                value: isDark,
+                activeColor: const Color(0xFF38BDF8),
+                onChanged: (bool value) {
+                  setState(() {
+                    themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
       ),
       body: _tabs[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF1D273D),
-        selectedItemColor: const Color(0xFF38BDF8),
-        unselectedItemColor: Colors.white54,
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
@@ -89,18 +143,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 List<Map<String, dynamic>> calculationHistory = [];
 
 class DraftSurveyTab extends StatefulWidget {
-  const DraftSurveyTab({Key? key}) : super(key: key);
+  const DraftSurveyTab({Key? key}) : super(Key: key);
 
   @override
   State<DraftSurveyTab> createState() => _DraftSurveyTabState();
 }
 
 class _DraftSurveyTabState extends State<DraftSurveyTab> {
-  final Color bgColor = const Color(0xFF131B2E);
-  final Color cardColor = const Color(0xFF1D273D);
-  final Color primaryBlue = const Color(0xFF38BDF8);
-  final Color buttonBlue = const Color(0xFF2563EB);
-
   // Controllers
   final _vesselNameController = TextEditingController();
   final _portController = TextEditingController();
@@ -207,32 +256,107 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     });
   }
 
-  // Hydrostatic Table Excel Import
+  // Guidelines Popup Modal para sa Hydrostatic Format
+  void _showHydrostaticFormatGuide() {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFF38BDF8)),
+              SizedBox(width: 8),
+              Text('Hydrostatic Format Guide', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'Format your Excel (.xlsx) or CSV file with 5 columns in Row 2 (Row 1 is Header):',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 10),
+                Text('Col A (1): Table Displacement (MT)'),
+                Text('Col B (2): LBP (m)'),
+                Text('Col C (3): LCF (m)'),
+                Text('Col D (4): TPC (Tons/cm)'),
+                Text('Col E (5): dMTC'),
+                SizedBox(height: 15),
+                Text(
+                  'Sample Data (Row 2):',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
+                Text('12500.5, 180.0, 2.15, 25.4, 180.2', style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                SizedBox(height: 10),
+                Text(
+                  '* Note: Ensure file extension is .xlsx, .xls, or .csv',
+                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('GOT IT'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Hydrostatic Table Import (Excel at CSV Support)
   Future<void> _importExcelHydrostatic() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls'],
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
     );
 
     if (result != null && result.files.single.path != null) {
-      var bytes = File(result.files.single.path!).readAsBytesSync();
-      var excel = Excel.decodeBytes(bytes);
+      String filePath = result.files.single.path!;
 
-      for (var table in excel.tables.keys) {
-        var sheet = excel.tables[table];
-        if (sheet != null && sheet.maxRows > 1) {
-          var row = sheet.rows[1];
+      if (filePath.endsWith('.csv')) {
+        // Handle CSV File
+        final input = File(filePath).readAsStringSync();
+        List<String> lines = const LineSplitter().convert(input);
+        if (lines.length > 1) {
+          List<String> row = lines[1].split(',');
           setState(() {
-            if (row.length > 0 && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
-            if (row.length > 1 && row[1]?.value != null) _lbpController.text = row[1]!.value.toString();
-            if (row.length > 2 && row[2]?.value != null) _lcfController.text = row[2]!.value.toString();
-            if (row.length > 3 && row[3]?.value != null) _tpcController.text = row[3]!.value.toString();
-            if (row.length > 4 && row[4]?.value != null) _dMtcController.text = row[4]!.value.toString();
+            if (row.isNotEmpty) _rawDispController.text = row[0].trim();
+            if (row.length > 1) _lbpController.text = row[1].trim();
+            if (row.length > 2) _lcfController.text = row[2].trim();
+            if (row.length > 3) _tpcController.text = row[3].trim();
+            if (row.length > 4) _dMtcController.text = row[4].trim();
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Hydrostatic data loaded successfully!')),
+            const SnackBar(content: Text('Hydrostatic CSV data loaded successfully!')),
           );
-          break;
+        }
+      } else {
+        // Handle Excel File (.xlsx, .xls)
+        var bytes = File(filePath).readAsBytesSync();
+        var excel = Excel.decodeBytes(bytes);
+
+        for (var table in excel.tables.keys) {
+          var sheet = excel.tables[table];
+          if (sheet != null && sheet.maxRows > 1) {
+            var row = sheet.rows[1];
+            setState(() {
+              if (row.length > 0 && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
+              if (row.length > 1 && row[1]?.value != null) _lbpController.text = row[1]!.value.toString();
+              if (row.length > 2 && row[2]?.value != null) _lcfController.text = row[2]!.value.toString();
+              if (row.length > 3 && row[3]?.value != null) _tpcController.text = row[3]!.value.toString();
+              if (row.length > 4 && row[4]?.value != null) _dMtcController.text = row[4]!.value.toString();
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Hydrostatic Excel data loaded successfully!')),
+            );
+            break;
+          }
         }
       }
     }
@@ -341,73 +465,96 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = themeNotifier.value == ThemeMode.dark;
+    final primaryBlue = isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
+    final buttonBlue = isDark ? const Color(0xFF2563EB) : const Color(0xFF1D4ED8);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
           _buildSectionCard(
             title: '1. Vessel Particulars & Port',
+            primaryColor: primaryBlue,
             children: [
               Row(
                 children: [
-                  Expanded(child: _buildInputField(_vesselNameController, 'Vessel Name')),
+                  Expanded(child: _buildInputField(_vesselNameController, 'Vessel Name', primaryBlue)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildInputField(_portController, 'Port')),
+                  Expanded(child: _buildInputField(_portController, 'Port', primaryBlue)),
                 ],
               ),
             ],
           ),
           _buildSectionCard(
             title: '2. Draft Observations (m)',
+            primaryColor: primaryBlue,
             children: [
               Row(
                 children: [
-                  Expanded(child: _buildInputField(_fwdPortController, 'Fwd Port')),
+                  Expanded(child: _buildInputField(_fwdPortController, 'Fwd Port', primaryBlue)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildInputField(_fwdStbdController, 'Fwd Stbd')),
+                  Expanded(child: _buildInputField(_fwdStbdController, 'Fwd Stbd', primaryBlue)),
                 ],
               ),
               Row(
                 children: [
-                  Expanded(child: _buildInputField(_midPortController, 'Mid Port')),
+                  Expanded(child: _buildInputField(_midPortController, 'Mid Port', primaryBlue)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildInputField(_midStbdController, 'Mid Stbd')),
+                  Expanded(child: _buildInputField(_midStbdController, 'Mid Stbd', primaryBlue)),
                 ],
               ),
               Row(
                 children: [
-                  Expanded(child: _buildInputField(_aftPortController, 'Aft Port')),
+                  Expanded(child: _buildInputField(_aftPortController, 'Aft Port', primaryBlue)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildInputField(_aftStbdController, 'Aft Stbd')),
+                  Expanded(child: _buildInputField(_aftStbdController, 'Aft Stbd', primaryBlue)),
                 ],
               ),
             ],
           ),
           _buildSectionCard(
             title: '3. Hydrostatics & Density',
+            primaryColor: primaryBlue,
             children: [
-              ElevatedButton.icon(
-                onPressed: _importExcelHydrostatic,
-                icon: const Icon(Icons.file_upload, color: Colors.white),
-                label: const Text('IMPORT HYDROSTATIC EXCEL'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _importExcelHydrostatic,
+                      icon: const Icon(Icons.file_upload, color: Colors.white),
+                      label: const Text('IMPORT HYDROSTATIC EXCEL'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _showHydrostaticFormatGuide,
+                    icon: const Icon(Icons.info_outline, color: Colors.teal),
+                    tooltip: 'Format Guidelines',
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
-              _buildInputField(_rawDispController, 'Table Displacement (MT)'),
-              _buildInputField(_lbpController, 'LBP (m)'),
-              _buildInputField(_lcfController, 'LCF (m)'),
-              _buildInputField(_tpcController, 'TPC (Tons/cm)'),
-              _buildInputField(_dMtcController, 'dMTC'),
-              _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)'),
+              _buildInputField(_rawDispController, 'Table Displacement (MT)', primaryBlue),
+              _buildInputField(_lbpController, 'LBP (m)', primaryBlue),
+              _buildInputField(_lcfController, 'LCF (m)', primaryBlue),
+              _buildInputField(_tpcController, 'TPC (Tons/cm)', primaryBlue),
+              _buildInputField(_dMtcController, 'dMTC', primaryBlue),
+              _buildInputField(_dockDensityController, 'Dock Water Density (t/m³)', primaryBlue),
             ],
           ),
           _buildSectionCard(
             title: '4. Deductibles (MT)',
+            primaryColor: primaryBlue,
             children: [
-              _buildInputField(_lightshipController, 'Lightship / Lightweight'),
-              _buildInputField(_ballastController, 'Ballast Water'),
-              _buildInputField(_vlsfoController, 'VLSFO / Fuel Oil'),
-              _buildInputField(_lsmgoController, 'LSMGO / Diesel Oil'),
+              _buildInputField(_lightshipController, 'Lightship / Lightweight', primaryBlue),
+              _buildInputField(_ballastController, 'Ballast Water', primaryBlue),
+              _buildInputField(_vlsfoController, 'VLSFO / Fuel Oil', primaryBlue),
+              _buildInputField(_lsmgoController, 'LSMGO / Diesel Oil', primaryBlue),
             ],
           ),
           const SizedBox(height: 10),
@@ -459,10 +606,10 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _exportExcelReport,
-                  icon: const Icon(Icons.download, color: Colors.greenAccent),
-                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                  icon: const Icon(Icons.download, color: Colors.green),
+                  label: const Text('EXPORT EXCEL', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.greenAccent),
+                    side: const BorderSide(color: Colors.green),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -486,6 +633,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           const SizedBox(height: 20),
           _buildSectionCard(
             title: 'RESULTS OUTPUT',
+            primaryColor: primaryBlue,
             children: [
               GridView.count(
                 shrinkWrap: true,
@@ -495,12 +643,12 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
                 children: [
-                  _buildResultTile('Quarter Mean', '${quarterMean.toStringAsFixed(3)} m'),
-                  _buildResultTile('Apparent Trim', '${apparentTrim.toStringAsFixed(3)} m'),
-                  _buildResultTile('1st Correction (FTC)', '${ftc.toStringAsFixed(2)} MT'),
-                  _buildResultTile('2nd Correction (STC)', '${stc.toStringAsFixed(2)} MT'),
-                  _buildResultTile('Corrected Disp', '${correctedDisplacement.toStringAsFixed(2)} MT'),
-                  _buildResultTile('Total Deductibles', '${totalDeductibles.toStringAsFixed(2)} MT'),
+                  _buildResultTile('Quarter Mean', '${quarterMean.toStringAsFixed(3)} m', primaryBlue),
+                  _buildResultTile('Apparent Trim', '${apparentTrim.toStringAsFixed(3)} m', primaryBlue),
+                  _buildResultTile('1st Correction (FTC)', '${ftc.toStringAsFixed(2)} MT', primaryBlue),
+                  _buildResultTile('2nd Correction (STC)', '${stc.toStringAsFixed(2)} MT', primaryBlue),
+                  _buildResultTile('Corrected Disp', '${correctedDisplacement.toStringAsFixed(2)} MT', primaryBlue),
+                  _buildResultTile('Total Deductibles', '${totalDeductibles.toStringAsFixed(2)} MT', primaryBlue),
                 ],
               ),
               const SizedBox(height: 12),
@@ -509,15 +657,15 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
                 decoration: BoxDecoration(
                   color: Colors.green.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.greenAccent),
+                  border: Border.all(color: Colors.green),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('NET CARGO DEADWEIGHT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const Text('NET CARGO DEADWEIGHT', style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(
                       '${netCargoDeadweight.toStringAsFixed(2)} MT',
-                      style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Colors.green, fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -529,44 +677,51 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
   }
 
-  Widget _buildSectionCard({required String title, required List<Widget> children}) {
+  Widget _buildSectionCard({required String title, required Color primaryColor, required List<Widget> children}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cardColor,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          if (themeNotifier.value == ThemeMode.light)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: primaryBlue, fontSize: 16, fontWeight: FontWeight.bold)),
-          const Divider(color: Colors.white24, height: 20),
+          Text(title, style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.bold)),
+          const Divider(height: 20),
           ...children,
         ],
       ),
     );
   }
 
-  Widget _buildInputField(TextEditingController controller, String label) {
+  Widget _buildInputField(TextEditingController controller, String label, Color primaryColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: TextField(
         controller: controller,
-        style: const TextStyle(color: Colors.white),
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.white70, fontSize: 13),
+          labelStyle: const TextStyle(fontSize: 13),
           filled: true,
-          fillColor: bgColor,
+          fillColor: themeNotifier.value == ThemeMode.dark ? const Color(0xFF131B2E) : const Color(0xFFF8FAFC),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Colors.white24),
+            borderSide: const BorderSide(color: Colors.black26),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: primaryBlue),
+            borderSide: BorderSide(color: primaryColor),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
@@ -574,21 +729,21 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
   }
 
-  Widget _buildResultTile(String title, String value) {
+  Widget _buildResultTile(String title, String value, Color primaryColor) {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: themeNotifier.value == ThemeMode.dark ? const Color(0xFF131B2E) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(8),
-        border: Border(left: BorderSide(color: primaryBlue, width: 3)),
+        border: Border(left: BorderSide(color: primaryColor, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -596,7 +751,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 }
 
 class HistoryLogTab extends StatefulWidget {
-  const HistoryLogTab({Key? key}) : super(key: key);
+  const HistoryLogTab({Key? key}) : super(Key: key);
 
   @override
   State<HistoryLogTab> createState() => _HistoryLogTabState();
@@ -606,9 +761,7 @@ class _HistoryLogTabState extends State<HistoryLogTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF131B2E),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1D273D),
         title: const Text('Calculation History Log', style: TextStyle(fontSize: 16)),
         actions: [
           IconButton(
@@ -622,17 +775,16 @@ class _HistoryLogTabState extends State<HistoryLogTab> {
         ],
       ),
       body: calculationHistory.isEmpty
-          ? const Center(child: Text('No History Logs Available', style: TextStyle(color: Colors.white54)))
+          ? const Center(child: Text('No History Logs Available', style: TextStyle(color: Colors.grey)))
           : ListView.builder(
               itemCount: calculationHistory.length,
               itemBuilder: (context, index) {
                 final item = calculationHistory[index];
                 return Card(
-                  color: const Color(0xFF1D273D),
                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: ListTile(
-                    title: Text('${item['vessel']} - ${item['port']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    subtitle: Text('Date: ${item['timestamp']}\nCargo: ${item['netCargo'].toStringAsFixed(2)} MT', style: const TextStyle(color: Colors.white70)),
+                    title: Text('${item['vessel']} - ${item['port']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Date: ${item['timestamp']}\nCargo: ${item['netCargo'].toStringAsFixed(2)} MT'),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
                       onPressed: () {
