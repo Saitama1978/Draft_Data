@@ -32,15 +32,17 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1" "ndk;25.2.9519653" || true
 
-      - name: Create Flutter Android Project Structure
-        run: flutter create . --platforms=android --org=com.renantefullo.shipcalc
-
-      - name: Fix Android Manifest, Styles, and SDK Settings
+      - name: Create Native Android Platform Files
         run: |
-          # 1. Burahin ang duplicate .kts file
+          # Buuin ang android directory kung wala pa
+          flutter create --platforms=android --org=com.renantefullo.shipcalc .
+
+      - name: Setup Manifest and Android Configurations
+        run: |
+          # 1. Alisin ang hindi kailangang build.gradle.kts
           rm -f android/app/build.gradle.kts
 
-          # 2. Gumawa ng styles.xml para maiwasan ang launch crash
+          # 2. Siguraduhing may tamang styles.xml
           mkdir -p android/app/src/main/res/values
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -54,7 +56,7 @@ jobs:
           </resources>
           EOF
 
-          # 3. Gumawa ng AndroidManifest.xml
+          # 3. AndroidManifest.xml configuration
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -84,7 +86,7 @@ jobs:
           </manifest>
           EOF
 
-          # 4. Gumawa ng Kotlin MainActivity
+          # 4. Lumikha ng MainActivity.kt
           mkdir -p android/app/src/main/kotlin/com/renantefullo/shipcalc
           cat << 'EOF' > android/app/src/main/kotlin/com/renantefullo/shipcalc/MainActivity.kt
           package com.renantefullo.shipcalc
@@ -95,24 +97,7 @@ jobs:
           }
           EOF
 
-          # 5. Set minSdk 24 at compileSdk 36 sa buong project
-          cat << 'EOF' >> android/build.gradle
-
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 36
-                          defaultConfig {
-                              minSdkVersion 24
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
-
-          # 6. Force Debug Signing sa Release build
+          # 5. Set Debug signing config sa Release build sa app/build.gradle
           cat << 'EOF' >> android/app/build.gradle
 
           android {
@@ -124,14 +109,7 @@ jobs:
           }
           EOF
 
-          # 7. Apply SDK updates
-          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
-          sed -i 's/minSdk .*/minSdk = 24/' android/app/build.gradle || true
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
-          sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
-
-          # 8. Set properties
+          # 6. Override SDK levels sa gradle.properties
           echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
           echo "flutter.minSdkVersion=24" >> android/gradle.properties
 
@@ -152,27 +130,18 @@ jobs:
           convert icon.png -resize 144x144 PNG32:android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert icon.png -resize 192x192 PNG32:android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Install Dependencies
+      - name: Get Flutter Dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle Wrapper
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+      - name: Build Signed APK via Flutter CLI
+        run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Extract and Collect APK
+      - name: Collect APK File
         run: |
           mkdir -p final_apk
-          FOUND_APK=$(find . -type f -name "*.apk" | head -n 1)
-          if [ -n "$FOUND_APK" ]; then
-            echo "Found APK at: $FOUND_APK"
-            cp "$FOUND_APK" final_apk/app-release.apk
-          else
-            echo "No APK found!" && exit 1
-          fi
+          cp build/app/outputs/flutter-apk/app-release.apk final_apk/app-release.apk
 
-      - name: Upload APK to Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Draft-Survey-Pro-APK
