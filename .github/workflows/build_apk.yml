@@ -55,9 +55,10 @@ jobs:
           </resources>
           EOF
 
-          # 3. AndroidManifest.xml configuration
+          # 3. AndroidManifest.xml configuration na may package at embedding v2
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.renantefullo.shipcalc">
               <application
                   android:label="Draft Survey Pro"
                   android:name="${applicationName}"
