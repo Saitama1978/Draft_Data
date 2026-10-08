@@ -208,6 +208,54 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> with AutomaticKeepAlive
     updateDeductiblesCallback = _updateDeductiblesFromTanks;
   }
 
+  void _showHydroFormatGuide() {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFF38BDF8)),
+              SizedBox(width: 8),
+              Text('Hydrostatic Excel Format', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'Format your Excel (.xlsx) or CSV file with 6 columns starting from Row 2 (Row 1 is Header):',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 10),
+                Text('Col A (1): Draft (m)'),
+                Text('Col B (2): Displacement (MT)'),
+                Text('Col C (3): LBP (m)'),
+                Text('Col D (4): LCF (m)'),
+                Text('Col E (5): TPC (Tons/cm)'),
+                Text('Col F (6): dMTC'),
+                SizedBox(height: 15),
+                Text(
+                  'Sample Data Row:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
+                Text('12.50, 42000.0, 225.0, 1.25, 52.4, 610.5', style: TextStyle(fontSize: 11, fontFamily: 'monospace')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('GOT IT'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _updateDeductiblesFromTanks(double ballast, double vlsfo, double lsmgo, double fw) {
     setState(() {
       if (ballast > 0) _ballastController.text = ballast.toStringAsFixed(2);
@@ -775,6 +823,12 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> with AutomaticKeepAlive
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _showHydroFormatGuide,
+                    icon: const Icon(Icons.info_outline, color: Colors.teal),
+                    tooltip: 'Hydrostatic Format Guide',
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -1209,8 +1263,8 @@ class _HistoryLogTabState extends State<HistoryLogTab> {
                   child: ListTile(
                     onTap: () {
                       if (loadHistoryToSurveyCallback != null) {
-                        loadHistoryToSurveyCallback!(item); // 1. Ikakarga ang data sa controllers
-                        widget.onLoadHistoryItem(); // 2. Awtomatikong lilipat pabalik sa Draft Survey Tab
+                        loadHistoryToSurveyCallback!(item);
+                        widget.onLoadHistoryItem();
                       }
                     },
                     title: Text('${item['vessel']} - ${item['port']}', style: const TextStyle(fontWeight: FontWeight.bold)),
