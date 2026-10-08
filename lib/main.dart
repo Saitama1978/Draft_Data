@@ -862,22 +862,119 @@ class TankSoundingTab extends StatefulWidget {
 }
 
 class _TankSoundingTabState extends State<TankSoundingTab> {
-  final _wb1Controller = TextEditingController();
-  final _wb2Controller = TextEditingController();
-  final _vlsfo1Controller = TextEditingController();
-  final _lsmgo1Controller = TextEditingController();
-  final _fw1Controller = TextEditingController();
+  final _ballastController = TextEditingController();
+  final _vlsfoController = TextEditingController();
+  final _lsmgoController = TextEditingController();
+  final _fwController = TextEditingController();
+
+  void _showTankFormatGuide() {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFF38BDF8)),
+              SizedBox(width: 8),
+              Text('Tank Excel Format Guide', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'Format your Excel (.xlsx) or CSV file with 4 columns starting from Row 2 (Row 1 is Header):',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 10),
+                Text('Col A (1): Ballast Water Total (MT)'),
+                Text('Col B (2): VLSFO Total (MT)'),
+                Text('Col C (3): LSMGO Total (MT)'),
+                Text('Col D (4): Fresh Water Total (MT)'),
+                SizedBox(height: 15),
+                Text(
+                  'Sample Data (Row 2):',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
+                Text('14250.50, 420.25, 85.10, 110.00', style: TextStyle(fontSize: 11, fontFamily: 'monospace')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('GOT IT'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _importTankExcel() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      String filePath = result.files.single.path!;
+
+      try {
+        if (filePath.endsWith('.csv')) {
+          final input = File(filePath).readAsStringSync();
+          List<String> lines = const LineSplitter().convert(input);
+          if (lines.length > 1) {
+            List<String> cols = lines[1].split(',');
+            setState(() {
+              if (cols.isNotEmpty) _ballastController.text = cols[0].trim();
+              if (cols.length > 1) _vlsfoController.text = cols[1].trim();
+              if (cols.length > 2) _lsmgoController.text = cols[2].trim();
+              if (cols.length > 3) _fwController.text = cols[3].trim();
+            });
+          }
+        } else {
+          var bytes = File(filePath).readAsBytesSync();
+          var excel = Excel.decodeBytes(bytes);
+
+          for (var tableName in excel.tables.keys) {
+            var sheet = excel.tables[tableName];
+            if (sheet != null && sheet.maxRows > 1) {
+              var row = sheet.rows[1];
+              setState(() {
+                if (row.isNotEmpty && row[0]?.value != null) _ballastController.text = row[0]!.value.toString();
+                if (row.length > 1 && row[1]?.value != null) _vlsfoController.text = row[1]!.value.toString();
+                if (row.length > 2 && row[2]?.value != null) _lsmgoController.text = row[2]!.value.toString();
+                if (row.length > 3 && row[3]?.value != null) _fwController.text = row[3]!.value.toString();
+              });
+              break;
+            }
+          }
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tank quantities imported successfully!')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading Excel: $e')),
+        );
+      }
+    }
+  }
 
   void _syncWithSurvey() {
-    double totalBallast = (double.tryParse(_wb1Controller.text) ?? 0.0) + (double.tryParse(_wb2Controller.text) ?? 0.0);
-    double totalVlsfo = double.tryParse(_vlsfo1Controller.text) ?? 0.0;
-    double totalLsmgo = double.tryParse(_lsmgo1Controller.text) ?? 0.0;
-    double totalFw = double.tryParse(_fw1Controller.text) ?? 0.0;
+    double totalBallast = double.tryParse(_ballastController.text) ?? 0.0;
+    double totalVlsfo = double.tryParse(_vlsfoController.text) ?? 0.0;
+    double totalLsmgo = double.tryParse(_lsmgoController.text) ?? 0.0;
+    double totalFw = double.tryParse(_fwController.text) ?? 0.0;
 
     if (updateDeductiblesCallback != null) {
       updateDeductiblesCallback!(totalBallast, totalVlsfo, totalLsmgo, totalFw);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tank totals sent to Draft Survey Deductibles!')),
+        const SnackBar(content: Text('Tank totals transferred to Draft Survey Deductibles!')),
       );
     }
   }
@@ -889,19 +986,53 @@ class _TankSoundingTabState extends State<TankSoundingTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Tank Sounding / Quantity Input (MT)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('Tank Sounding / Deductibles Input (MT)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          
+          // OPTION 1: IMPORT EXCEL
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _importTankExcel,
+                  icon: const Icon(Icons.file_upload, color: Colors.white),
+                  label: const Text('IMPORT TANK SOUNDING EXCEL'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _showTankFormatGuide,
+                icon: const Icon(Icons.info_outline, color: Colors.teal),
+                tooltip: 'Format Guide',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 8),
+
+          // OPTION 2: DIRECT MANUAL INPUT
+          const Text('Or Enter Totals Manually:', style: TextStyle(fontSize: 13, color: Colors.grey)),
           const SizedBox(height: 10),
-          TextField(controller: _wb1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'W.B. Tank No. 1 (MT)')),
-          TextField(controller: _wb2Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'W.B. Tank No. 2 (MT)')),
-          TextField(controller: _vlsfo1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'VLSFO Storage Tank (MT)')),
-          TextField(controller: _lsmgo1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'LSMGO Storage Tank (MT)')),
-          TextField(controller: _fw1Controller, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Fresh Water Tank (MT)')),
-          const SizedBox(height: 20),
+          TextField(controller: _ballastController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total Ballast Water (MT)')),
+          TextField(controller: _vlsfoController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total VLSFO / Fuel Oil (MT)')),
+          TextField(controller: _lsmgoController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total LSMGO / Diesel Oil (MT)')),
+          TextField(controller: _fwController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total Fresh Water (MT)')),
+          
+          const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _syncWithSurvey,
             icon: const Icon(Icons.sync),
             label: const Text('TRANSFER TOTALS TO DRAFT SURVEY'),
-            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48), backgroundColor: Colors.teal),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              backgroundColor: const Color(0xFF0284C7),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),
