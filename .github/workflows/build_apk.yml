@@ -78,7 +78,7 @@ jobs:
           }
           EOF
 
-          # 4. Set minSdk 24 at compileSdk 36 sa buong project
+          # 4. Set minSdk 24, compileSdk 36, at Force Debug Signing sa Release build
           cat << 'EOF' >> android/build.gradle
 
           subprojects {
@@ -95,14 +95,26 @@ jobs:
           }
           EOF
 
-          # 5. Baguhin ang values sa app-level build.gradle
+          # 5. Force Release build type na gamitin ang debug signingConfig
+          cat << 'EOF' >> android/app/build.gradle
+
+          android {
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          EOF
+
+          # 6. Baguhin ang values sa app-level build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
           sed -i 's/minSdk .*/minSdk = 24/' android/app/build.gradle || true
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
 
-          # 6. Set configs sa gradle.properties
+          # 7. Set configs sa gradle.properties
           echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
           echo "flutter.minSdkVersion=24" >> android/gradle.properties
 
@@ -132,7 +144,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Extract and Collect Generated APK
+      - name: Extract and Collect Signed APK
         run: |
           mkdir -p final_apk
           FOUND_APK=$(find . -type f -name "*.apk" | head -n 1)
