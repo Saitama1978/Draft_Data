@@ -36,7 +36,7 @@ jobs:
         run: |
           flutter create --platforms=android --org=com.renantefullo.shipcalc .
 
-      - name: Fix Android SDK 36, Manifest, Styles & Signing
+      - name: Fix Android Manifest, Namespace, SDK 36 & Signing
         run: |
           # 1. Burahin ang gradle.kts file para maiwasan ang conflict
           rm -f android/app/build.gradle.kts
@@ -55,10 +55,9 @@ jobs:
           </resources>
           EOF
 
-          # 3. AndroidManifest.xml configuration na may package at embedding v2
+          # 3. AndroidManifest.xml (TANGGAL ang package attribute para hindi mag-fail ang Gradle)
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.renantefullo.shipcalc">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:label="Draft Survey Pro"
                   android:name="${applicationName}"
@@ -115,19 +114,21 @@ jobs:
           }
           EOF
 
-          # 6. Adjust app build.gradle SDKs
+          # 6. Adjust app build.gradle SDKs & namespace
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
           sed -i 's/targetSdk .*/targetSdk = 36/' android/app/build.gradle || true
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
 
-          # 7. Set debug signing sa release configuration
+          # 7. Set Namespace at Debug Signing sa app/build.gradle
           cat << 'EOF' >> android/app/build.gradle
 
           android {
+              namespace 'com.renantefullo.shipcalc'
               compileSdkVersion 36
               defaultConfig {
+                  applicationId "com.renantefullo.shipcalc"
                   targetSdkVersion 36
               }
               buildTypes {
