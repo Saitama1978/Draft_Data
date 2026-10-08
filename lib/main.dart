@@ -18,7 +18,7 @@ void main() {
 }
 
 class DraftSurveyProApp extends StatelessWidget {
-  const DraftSurveyProApp({Key? key}) : super(Key: key);
+  const DraftSurveyProApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +68,7 @@ class DraftSurveyProApp extends StatelessWidget {
 }
 
 class MainHomeScreen extends StatefulWidget {
-  const MainHomeScreen({Key? key}) : super(Key: key);
+  const MainHomeScreen({super.key});
 
   @override
   State<MainHomeScreen> createState() => _MainHomeScreenState();
@@ -96,7 +96,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ],
         ),
         actions: [
-          // LIGHT / DARK MODE TOGGLE SWITCH
           Row(
             children: [
               Icon(
@@ -143,7 +142,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 List<Map<String, dynamic>> calculationHistory = [];
 
 class DraftSurveyTab extends StatefulWidget {
-  const DraftSurveyTab({Key? key}) : super(Key: key);
+  const DraftSurveyTab({super.key});
 
   @override
   State<DraftSurveyTab> createState() => _DraftSurveyTabState();
@@ -256,7 +255,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     });
   }
 
-  // Guidelines Popup Modal para sa Hydrostatic Format
   void _showHydrostaticFormatGuide() {
     showDialog(
       context: context,
@@ -309,7 +307,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     );
   }
 
-  // Hydrostatic Table Import (Excel at CSV Support)
   Future<void> _importExcelHydrostatic() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -320,7 +317,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
       String filePath = result.files.single.path!;
 
       if (filePath.endsWith('.csv')) {
-        // Handle CSV File
         final input = File(filePath).readAsStringSync();
         List<String> lines = const LineSplitter().convert(input);
         if (lines.length > 1) {
@@ -337,7 +333,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           );
         }
       } else {
-        // Handle Excel File (.xlsx, .xls)
         var bytes = File(filePath).readAsBytesSync();
         var excel = Excel.decodeBytes(bytes);
 
@@ -346,7 +341,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
           if (sheet != null && sheet.maxRows > 1) {
             var row = sheet.rows[1];
             setState(() {
-              if (row.length > 0 && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
+              if (row.isNotEmpty && row[0]?.value != null) _rawDispController.text = row[0]!.value.toString();
               if (row.length > 1 && row[1]?.value != null) _lbpController.text = row[1]!.value.toString();
               if (row.length > 2 && row[2]?.value != null) _lcfController.text = row[2]!.value.toString();
               if (row.length > 3 && row[3]?.value != null) _tpcController.text = row[3]!.value.toString();
@@ -362,7 +357,6 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
     }
   }
 
-  // Export Data to Excel
   Future<void> _exportExcelReport() async {
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Draft Survey Report'];
@@ -751,7 +745,7 @@ class _DraftSurveyTabState extends State<DraftSurveyTab> {
 }
 
 class HistoryLogTab extends StatefulWidget {
-  const HistoryLogTab({Key? key}) : super(Key: key);
+  const HistoryLogTab({super.key});
 
   @override
   State<HistoryLogTab> createState() => _HistoryLogTabState();
