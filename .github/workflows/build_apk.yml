@@ -27,22 +27,21 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Accept Android Licenses & Install CMake
+      - name: Accept Android Licenses & Install SDK Components
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1" "ndk;25.2.9519653" || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;25.2.9519653" || true
 
       - name: Create Native Android Platform Files
         run: |
-          # Buuin ang android directory kung wala pa
           flutter create --platforms=android --org=com.renantefullo.shipcalc .
 
-      - name: Setup Manifest and Android Configurations
+      - name: Fix Android SDK 36, Manifest, Styles & Signing
         run: |
-          # 1. Alisin ang hindi kailangang build.gradle.kts
+          # 1. Burahin ang gradle.kts file para maiwasan ang conflict
           rm -f android/app/build.gradle.kts
 
-          # 2. Siguraduhing may tamang styles.xml
+          # 2. Gumawa ng styles.xml
           mkdir -p android/app/src/main/res/values
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -86,7 +85,7 @@ jobs:
           </manifest>
           EOF
 
-          # 4. Lumikha ng MainActivity.kt
+          # 4. Kotlin MainActivity
           mkdir -p android/app/src/main/kotlin/com/renantefullo/shipcalc
           cat << 'EOF' > android/app/src/main/kotlin/com/renantefullo/shipcalc/MainActivity.kt
           package com.renantefullo.shipcalc
@@ -97,10 +96,39 @@ jobs:
           }
           EOF
 
-          # 5. Set Debug signing config sa Release build sa app/build.gradle
+          # 5. Pilitin ang android/build.gradle na mag-override sa compileSdkVersion 36 para sa LAHAT ng plugins
+          cat << 'EOF' >> android/build.gradle
+
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 36
+                          defaultConfig {
+                              minSdkVersion 24
+                              targetSdkVersion 36
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # 6. I-update ang app-level build.gradle para maging 36 ang compileSdk
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle || true
+          sed -i 's/compileSdk .*/compileSdk = 36/' android/app/build.gradle || true
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle || true
+          sed -i 's/targetSdk .*/targetSdk = 36/' android/app/build.gradle || true
+          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
+
+          # 7. Set debug signing para sa release builds
           cat << 'EOF' >> android/app/build.gradle
 
           android {
+              compileSdkVersion 36
+              defaultConfig {
+                  targetSdkVersion 36
+              }
               buildTypes {
                   release {
                       signingConfig signingConfigs.debug
@@ -109,7 +137,7 @@ jobs:
           }
           EOF
 
-          # 6. Override SDK levels sa gradle.properties
+          # 8. Set gradle properties
           echo "android.suppressUnsupportedCompileSdk=36" >> android/gradle.properties
           echo "flutter.minSdkVersion=24" >> android/gradle.properties
 
