@@ -117,19 +117,17 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Locate and Move APK Output
+      - name: Build APK via Gradle
         run: |
-          mkdir -p build/app/outputs/flutter-apk
-          find build/ -name "*.apk" -exec cp {} build/app/outputs/flutter-apk/app-release.apk \;
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Draft Survey Pro v1.0.${{ github.run_number }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
